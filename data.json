@@ -1,0 +1,63 @@
+{
+  "tasks": {
+    "jayce": {
+      "2026-05-04": {
+        "conv_3": true,
+        "conv_4": false,
+        "ghost_5": false,
+        "monoline": true,
+        "bundle": true,
+        "life_app": true
+      },
+      "2026-05-06": {
+        "life_sale": false,
+        "ghost_10": false,
+        "ghost_5": false,
+        "conv_4": false,
+        "conv_3": false
+      }
+    },
+    "alissa": {
+      "2026-05-06": {
+        "ghost_10": false,
+        "life_app": false,
+        "life_sale": false,
+        "conv_3": false
+      },
+      "2026-05-04": {
+        "conv_3": true,
+        "life_app": true,
+        "life_sale": true
+      }
+    }
+  },
+  "habits": {
+    "jayce": {
+      "2026-05-08": {
+        "morning_mindset": false,
+        "followup_calls": false
+      }
+    }
+  },
+  "notes": {},
+  "wins": {},
+  "challenges": {},
+  "clients": {
+    "jayce": {
+      "2026-05-06": {}
+    }
+  },
+  "log": [
+    {
+      "person": "jayce",
+      "personName": "Jayce",
+      "taskId": "life_sale",
+      "taskLabel": "Life Sale",
+      "clientName": "Sarah Johnson",
+      "date": "2026-05-06",
+      "time": "01:05 PM",
+      "timestamp": 1778094327067,
+      "id": 1778094327111.9375
+    }
+  ]
+}
