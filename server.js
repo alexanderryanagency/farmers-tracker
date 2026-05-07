@@ -92,18 +92,47 @@ app.get('/api/week', (req, res) => {
   res.json({ weekDates, weekKey, data });
 });
 
+// Current sales month: April 18 – May 19, 2026
+const SALES_MONTH_START = '2026-04-18';
+const SALES_MONTH_END   = '2026-05-19';
+
+function dateRange(start, end) {
+  const dates = [];
+  const d = new Date(start + 'T12:00:00Z');
+  const last = new Date(end + 'T12:00:00Z');
+  while (d <= last) {
+    dates.push(d.toISOString().split('T')[0]);
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function workingDays(dates) {
+  return dates.filter(d => {
+    const dow = new Date(d + 'T12:00:00Z').getUTCDay();
+    return dow >= 1 && dow <= 5;
+  }).length;
+}
+
 app.get('/api/kpi', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
-  const [year, month] = today.split('-');
-  const monthStart = `${year}-${month}-01`;
-  const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
 
-  const allDays = [];
-  for (let d = 1; d <= 31; d++) {
-    const dateStr = `${year}-${month}-${String(d).padStart(2, '0')}`;
-    if (dateStr > today) break;
-    allDays.push(dateStr);
+  // Nothing to show before the sales month opens
+  if (today < SALES_MONTH_START) {
+    const zero = {
+      totalConversations: 0, totalSales: 0, totalPolicies: 0,
+      totalHouseholds: 0, totalPremium: 0,
+      workingDaysElapsed: 0, workingDaysTotal: 0,
+      avgConvPerDay: 0, closeRate: 0, policiesPerHH: 0, premiumPace: 0,
+    };
+    return res.json({ data: Object.fromEntries(PERSONS.map(p => [p, zero])) });
   }
+
+  const periodEnd = today <= SALES_MONTH_END ? today : SALES_MONTH_END;
+  const elapsedDates = dateRange(SALES_MONTH_START, periodEnd);
+  const fullDates    = dateRange(SALES_MONTH_START, SALES_MONTH_END);
+  const workingDaysElapsed = workingDays(elapsedDates);
+  const workingDaysTotal   = workingDays(fullDates);
 
   const allLog = store.getLog();
   const result = {};
@@ -112,18 +141,18 @@ app.get('/api/kpi', (req, res) => {
     let totalConversations = 0;
     let totalSales = 0;
 
-    for (const date of allDays) {
+    for (const date of elapsedDates) {
       const tasks = store.getTasks(person, date);
       totalConversations += Number(tasks['new_conv']) || 0;
       if (tasks['monoline']) totalSales++;
-      if (tasks['bundle']) totalSales++;
+      if (tasks['bundle'])   totalSales++;
     }
 
-    // Deduplicate log entries per (date, taskId) — take most recent
+    // Deduplicate log entries per (date, taskId) — keep most recent
     const saleMap = new Map();
     for (const entry of allLog) {
       if (entry.person !== person) continue;
-      if (entry.date < monthStart || entry.date > today) continue;
+      if (entry.date < SALES_MONTH_START || entry.date > periodEnd) continue;
       if (entry.taskId !== 'monoline' && entry.taskId !== 'bundle') continue;
       const key = `${entry.date}-${entry.taskId}`;
       const existing = saleMap.get(key);
@@ -143,19 +172,26 @@ app.get('/api/kpi', (req, res) => {
       if (entry.newHousehold) totalHouseholds++;
     }
 
-    const daysElapsed = allDays.length;
+    // premiumPace: projected total for the full sales month at current working-day rate
+    const premiumPace = workingDaysElapsed > 0
+      ? (totalPremium / workingDaysElapsed) * workingDaysTotal
+      : 0;
+
     result[person] = {
       totalConversations,
       totalSales,
       totalPolicies,
       totalHouseholds,
       totalPremium,
-      daysElapsed,
-      daysInMonth,
-      avgConvPerDay:  daysElapsed > 0 ? totalConversations / daysElapsed : 0,
-      closeRate:      totalConversations > 0 ? (totalSales / totalConversations) * 100 : 0,
-      policiesPerHH:  totalHouseholds > 0 ? totalPolicies / totalHouseholds : 0,
-      premiumPace:    daysElapsed > 0 ? (totalPremium / daysElapsed) * daysInMonth : 0,
+      workingDaysElapsed,
+      workingDaysTotal,
+      // Conv/Day: conversations ÷ working days elapsed
+      avgConvPerDay: workingDaysElapsed > 0 ? totalConversations / workingDaysElapsed : 0,
+      // Close Rate: households closed (sales) ÷ conversations
+      closeRate:     totalConversations > 0 ? (totalSales / totalConversations) * 100 : 0,
+      // Pol/HH: policies ÷ households closed (sales)
+      policiesPerHH: totalSales > 0 ? totalPolicies / totalSales : 0,
+      premiumPace,
     };
   }
 

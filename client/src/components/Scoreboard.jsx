@@ -17,7 +17,7 @@ function buildTeamKpi(people, kpiData) {
   const totalPol     = pkpis.reduce((s, k) => s + k.totalPolicies, 0);
   const totalHH      = pkpis.reduce((s, k) => s + k.totalHouseholds, 0);
   const totalPremium = pkpis.reduce((s, k) => s + k.totalPremium, 0);
-  const { daysElapsed, daysInMonth } = pkpis[0];
+  const { workingDaysElapsed, workingDaysTotal } = pkpis[0];
 
   return {
     totalConversations: totalConv,
@@ -25,12 +25,14 @@ function buildTeamKpi(people, kpiData) {
     totalPolicies: totalPol,
     totalHouseholds: totalHH,
     totalPremium,
-    daysElapsed,
-    daysInMonth,
-    avgConvPerDay:  daysElapsed > 0 ? totalConv / (pkpis.length * daysElapsed) : 0,
-    closeRate:      totalConv > 0 ? (totalSales / totalConv) * 100 : 0,
-    policiesPerHH:  totalHH > 0 ? totalPol / totalHH : 0,
-    premiumPace:    daysElapsed > 0 ? (totalPremium / daysElapsed) * daysInMonth : 0,
+    workingDaysElapsed,
+    workingDaysTotal,
+    // Average Conv/Day across both producers using working days
+    avgConvPerDay: workingDaysElapsed > 0 ? totalConv / (pkpis.length * workingDaysElapsed) : 0,
+    closeRate:     totalConv > 0 ? (totalSales / totalConv) * 100 : 0,
+    policiesPerHH: totalSales > 0 ? totalPol / totalSales : 0,
+    // Sum each producer's pace (already working-day adjusted)
+    premiumPace:   pkpis.reduce((s, k) => s + k.premiumPace, 0),
   };
 }
 
