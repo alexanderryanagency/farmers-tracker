@@ -38,14 +38,19 @@ function LockIcon() {
 export default function App() {
   const [activeTab, setActiveTab] = useState('scoreboard');
   const [weekData, setWeekData] = useState(null);
+  const [kpiData, setKpiData]   = useState(null);
   const [loading, setLoading] = useState(true);
   const today = new Date().toISOString().split('T')[0];
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/week?date=${today}`);
-      const data = await res.json();
-      setWeekData(data);
+      const [weekRes, kpiRes] = await Promise.all([
+        fetch(`/api/week?date=${today}`),
+        fetch(`/api/kpi?date=${today}`),
+      ]);
+      const [week, kpi] = await Promise.all([weekRes.json(), kpiRes.json()]);
+      setWeekData(week);
+      setKpiData(kpi);
     } catch (err) {
       console.error('Failed to fetch:', err);
     } finally {
@@ -107,7 +112,7 @@ export default function App() {
 
       <main className="app-main">
         {activeTab === 'scoreboard' && (
-          <Scoreboard weekData={weekData} people={PEOPLE} />
+          <Scoreboard weekData={weekData} people={PEOPLE} kpiData={kpiData} />
         )}
         {PEOPLE.map(person =>
           activeTab === person.id && (
@@ -117,6 +122,7 @@ export default function App() {
               weekData={weekData}
               today={today}
               onRefresh={fetchData}
+              kpiData={kpiData}
             />
           )
         )}

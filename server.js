@@ -92,8 +92,78 @@ app.get('/api/week', (req, res) => {
   res.json({ weekDates, weekKey, data });
 });
 
+app.get('/api/kpi', (req, res) => {
+  const today = req.query.date || new Date().toISOString().split('T')[0];
+  const [year, month] = today.split('-');
+  const monthStart = `${year}-${month}-01`;
+  const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+
+  const allDays = [];
+  for (let d = 1; d <= 31; d++) {
+    const dateStr = `${year}-${month}-${String(d).padStart(2, '0')}`;
+    if (dateStr > today) break;
+    allDays.push(dateStr);
+  }
+
+  const allLog = store.getLog();
+  const result = {};
+
+  for (const person of PERSONS) {
+    let totalConversations = 0;
+    let totalSales = 0;
+
+    for (const date of allDays) {
+      const tasks = store.getTasks(person, date);
+      totalConversations += Number(tasks['new_conv']) || 0;
+      if (tasks['monoline']) totalSales++;
+      if (tasks['bundle']) totalSales++;
+    }
+
+    // Deduplicate log entries per (date, taskId) — take most recent
+    const saleMap = new Map();
+    for (const entry of allLog) {
+      if (entry.person !== person) continue;
+      if (entry.date < monthStart || entry.date > today) continue;
+      if (entry.taskId !== 'monoline' && entry.taskId !== 'bundle') continue;
+      const key = `${entry.date}-${entry.taskId}`;
+      const existing = saleMap.get(key);
+      if (!existing || entry.timestamp > existing.timestamp) saleMap.set(key, entry);
+    }
+
+    let totalPremium = 0;
+    let totalPolicies = 0;
+    let totalHouseholds = 0;
+
+    for (const entry of saleMap.values()) {
+      if (entry.premium) {
+        const amt = parseFloat(String(entry.premium).replace(/[$,\s]/g, ''));
+        if (!isNaN(amt)) totalPremium += amt;
+      }
+      totalPolicies += entry.numPolicies != null ? Number(entry.numPolicies) : 1;
+      if (entry.newHousehold) totalHouseholds++;
+    }
+
+    const daysElapsed = allDays.length;
+    result[person] = {
+      totalConversations,
+      totalSales,
+      totalPolicies,
+      totalHouseholds,
+      totalPremium,
+      daysElapsed,
+      daysInMonth,
+      avgConvPerDay:  daysElapsed > 0 ? totalConversations / daysElapsed : 0,
+      closeRate:      totalConversations > 0 ? (totalSales / totalConversations) * 100 : 0,
+      policiesPerHH:  totalHouseholds > 0 ? totalPolicies / totalHouseholds : 0,
+      premiumPace:    daysElapsed > 0 ? (totalPremium / daysElapsed) * daysInMonth : 0,
+    };
+  }
+
+  res.json({ data: result });
+});
+
 app.post('/api/task', (req, res) => {
-  const { person, taskId, date, completed, clientName, premium, numPolicies } = req.body;
+  const { person, taskId, date, completed, clientName, premium, numPolicies, newHousehold } = req.body;
   store.setTask(person, taskId, date, completed);
 
   if (completed && clientName) {
@@ -111,6 +181,7 @@ app.post('/api/task', (req, res) => {
     };
     if (premium != null) entry.premium = premium;
     if (numPolicies != null) entry.numPolicies = numPolicies;
+    if (newHousehold != null) entry.newHousehold = newHousehold;
     store.addLogEntry(entry);
   } else if (!completed) {
     store.setClientName(person, taskId, date, null);

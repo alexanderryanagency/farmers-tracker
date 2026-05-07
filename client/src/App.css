@@ -551,6 +551,123 @@ html, body {
 .challenge-field .daily-input:focus { border-color: rgba(251,146,60,0.35); }
 .daily-input::placeholder { color: var(--t3); }
 
+/* ════════════════════════════
+   KPI STRIP
+════════════════════════════ */
+.kpi-strip {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.kpi-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 4px 6px;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.kpi-label {
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--t3);
+  white-space: nowrap;
+}
+
+.kpi-value {
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.kpi-good    { color: var(--gold); }
+.kpi-bad     { color: var(--red); }
+.kpi-neutral { color: var(--t2); }
+
+.kpi-goal {
+  font-size: 7px;
+  color: var(--t3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Team KPI section (scoreboard) */
+.team-kpi-section {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.team-kpi-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+}
+.team-kpi-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--t2);
+}
+.team-kpi-sub {
+  font-size: 9px;
+  color: var(--t3);
+  font-weight: 600;
+}
+.team-kpi-section .kpi-strip {
+  border-bottom: none;
+  background: transparent;
+  padding: 0 8px 8px;
+}
+
+/* Sale details toggle */
+.verify-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.verify-toggle-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t2);
+}
+.verify-toggle {
+  display: flex;
+  gap: 3px;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.toggle-opt {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--t3);
+  transition: background 0.15s, color 0.15s;
+}
+.toggle-opt.toggle-no  { background: var(--s3); color: var(--t2); }
+.toggle-opt.toggle-yes { background: var(--gold); color: #111; }
+
 /* Conversations dropdown task */
 .task-item.task-conv { cursor: default; }
 .task-item.task-conv:active { transform: none; }

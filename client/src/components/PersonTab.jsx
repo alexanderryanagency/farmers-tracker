@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import KPIStrip from './KPIStrip';
 
 const TASKS = [
   { id: 'new_conv',  label: 'New Conversations', type: 'dropdown', verified: false },
@@ -21,7 +22,7 @@ function getNewConvPoints(count) {
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-export default function PersonTab({ person, weekData, today, onRefresh }) {
+export default function PersonTab({ person, weekData, today, onRefresh, kpiData }) {
   const [selectedDate, setSelectedDate] = useState(today);
   const [winValue, setWinValue]           = useState('');
   const [challengeValue, setChallengeValue] = useState('');
@@ -30,6 +31,7 @@ export default function PersonTab({ person, weekData, today, onRefresh }) {
   const [pendingSaleDetails, setPendingSaleDetails] = useState(null);
   const [premiumInput, setPremiumInput]   = useState('');
   const [numPoliciesInput, setNumPoliciesInput] = useState('');
+  const [newHousehold, setNewHousehold]   = useState(false);
   const winTimer       = useRef(null);
   const challengeTimer = useRef(null);
   const numPoliciesRef = useRef(null);
@@ -90,6 +92,7 @@ export default function PersonTab({ person, weekData, today, onRefresh }) {
       setClientInput('');
       setPremiumInput('');
       setNumPoliciesInput('');
+      setNewHousehold(false);
       return;
     }
     await performToggle(pendingTask.id, true, clientInput.trim());
@@ -100,13 +103,14 @@ export default function PersonTab({ person, weekData, today, onRefresh }) {
   async function confirmSaleDetails() {
     if (!pendingSaleDetails) return;
     const { task, clientName } = pendingSaleDetails;
-    const saleDetails = {};
+    const saleDetails = { newHousehold };
     if (premiumInput.trim()) saleDetails.premium = premiumInput.trim();
     if (numPoliciesInput.trim()) saleDetails.numPolicies = Number(numPoliciesInput);
     await performToggle(task.id, true, clientName, saleDetails);
     setPendingSaleDetails(null);
     setPremiumInput('');
     setNumPoliciesInput('');
+    setNewHousehold(false);
   }
 
   // ── win / challenge auto-save ──
@@ -150,6 +154,11 @@ export default function PersonTab({ person, weekData, today, onRefresh }) {
           <span className="person-pts-label">pts / week</span>
         </div>
       </div>
+
+      {/* KPI strip — producers only */}
+      {person.role === 'Producer' && (
+        <KPIStrip kpi={kpiData?.data?.[person.id]} />
+      )}
 
       {/* Date strip */}
       <div className="date-selector">
@@ -315,6 +324,13 @@ export default function PersonTab({ person, weekData, today, onRefresh }) {
               onKeyDown={e => e.key === 'Enter' && confirmSaleDetails()}
               min="1"
             />
+            <div className="verify-toggle-row">
+              <span className="verify-toggle-label">New Household?</span>
+              <div className="verify-toggle">
+                <button type="button" className={`toggle-opt ${!newHousehold ? 'toggle-no' : ''}`} onClick={() => setNewHousehold(false)}>No</button>
+                <button type="button" className={`toggle-opt ${newHousehold ? 'toggle-yes' : ''}`} onClick={() => setNewHousehold(true)}>Yes</button>
+              </div>
+            </div>
             <div className="verify-actions">
               <button className="verify-cancel" onClick={() => setPendingSaleDetails(null)}>Cancel</button>
               <button className="verify-confirm" onClick={confirmSaleDetails}>

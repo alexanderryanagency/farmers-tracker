@@ -1,11 +1,40 @@
 import { useState } from 'react';
 import SpinWheel from './SpinWheel';
+import KPIStrip from './KPIStrip';
 
 function formatDate(d) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export default function Scoreboard({ weekData, people }) {
+function buildTeamKpi(people, kpiData) {
+  if (!kpiData) return null;
+  const producers = people.filter(p => p.role === 'Producer');
+  const pkpis = producers.map(p => kpiData.data?.[p.id]).filter(Boolean);
+  if (pkpis.length === 0) return null;
+
+  const totalConv    = pkpis.reduce((s, k) => s + k.totalConversations, 0);
+  const totalSales   = pkpis.reduce((s, k) => s + k.totalSales, 0);
+  const totalPol     = pkpis.reduce((s, k) => s + k.totalPolicies, 0);
+  const totalHH      = pkpis.reduce((s, k) => s + k.totalHouseholds, 0);
+  const totalPremium = pkpis.reduce((s, k) => s + k.totalPremium, 0);
+  const { daysElapsed, daysInMonth } = pkpis[0];
+
+  return {
+    totalConversations: totalConv,
+    totalSales,
+    totalPolicies: totalPol,
+    totalHouseholds: totalHH,
+    totalPremium,
+    daysElapsed,
+    daysInMonth,
+    avgConvPerDay:  daysElapsed > 0 ? totalConv / (pkpis.length * daysElapsed) : 0,
+    closeRate:      totalConv > 0 ? (totalSales / totalConv) * 100 : 0,
+    policiesPerHH:  totalHH > 0 ? totalPol / totalHH : 0,
+    premiumPace:    daysElapsed > 0 ? (totalPremium / daysElapsed) * daysInMonth : 0,
+  };
+}
+
+export default function Scoreboard({ weekData, people, kpiData }) {
   const [showWheel, setShowWheel] = useState(false);
 
   if (!weekData) return null;
@@ -16,6 +45,7 @@ export default function Scoreboard({ weekData, people }) {
 
   const maxPoints = Math.max(...ranked.map(p => p.points), 1);
   const totalPoints = ranked.reduce((s, p) => s + p.points, 0);
+  const teamKpi = buildTeamKpi(people, kpiData);
 
   return (
     <div className="scoreboard">
@@ -48,6 +78,16 @@ export default function Scoreboard({ weekData, people }) {
           </div>
         ))}
       </div>
+
+      {teamKpi && (
+        <div className="team-kpi-section">
+          <div className="team-kpi-header">
+            <span className="team-kpi-title">Team KPIs</span>
+            <span className="team-kpi-sub">Monthly · Producers</span>
+          </div>
+          <KPIStrip kpi={teamKpi} premiumGoal={60000} />
+        </div>
+      )}
 
       {totalPoints === 0 && (
         <p className="no-points-hint">No points logged yet — tap a name above to start.</p>
