@@ -56,7 +56,9 @@ function calcWeeklyPoints(person, weekDates) {
     const tasks = store.getTasks(person, date);
     return total + Object.entries(tasks).reduce((sum, [id, done]) => {
       if (id === 'new_conv') return sum + getNewConvPoints(done);
-      return sum + (done ? (TASK_POINTS[id] || 0) : 0);
+      const pts = TASK_POINTS[id] || 0;
+      if (id === 'monoline' || id === 'bundle') return sum + (Number(done) || 0) * pts;
+      return sum + (done ? pts : 0);
     }, 0);
   }, 0);
 }
@@ -65,6 +67,7 @@ app.get('/api/week', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
   const weekDates = getWeekDates(today);
   const weekKey = weekDates[0];
+  const allLog = store.getLog();
 
   const data = {};
   for (const person of PERSONS) {
@@ -72,12 +75,27 @@ app.get('/api/week', (req, res) => {
     const wins = {};
     const challenges = {};
     const clients = {};
+    const dailySales = {};
 
     for (const date of weekDates) {
       tasks[date] = store.getTasks(person, date);
       wins[date] = store.getWin(person, date);
       challenges[date] = store.getChallenge(person, date);
       clients[date] = store.getClients(person, date);
+
+      let premium = 0, policies = 0, households = 0;
+      for (const taskId of ['monoline', 'bundle']) {
+        const count = Number(tasks[date][taskId]) || 0;
+        for (const e of getSaleEntries(allLog, person, date, taskId, count)) {
+          if (e.premium) {
+            const amt = parseFloat(String(e.premium).replace(/[$,\s]/g, ''));
+            if (!isNaN(amt)) premium += amt;
+          }
+          policies += e.numPolicies != null ? Number(e.numPolicies) : 1;
+          if (e.newHousehold) households++;
+        }
+      }
+      dailySales[date] = { premium, policies, households };
     }
 
     data[person] = {
@@ -85,6 +103,7 @@ app.get('/api/week', (req, res) => {
       wins,
       challenges,
       clients,
+      dailySales,
       points: calcWeeklyPoints(person, weekDates),
     };
   }
@@ -114,6 +133,14 @@ function workingDays(dates) {
   }).length;
 }
 
+function getSaleEntries(allLog, person, date, taskId, n) {
+  if (n <= 0) return [];
+  return allLog
+    .filter(e => e.person === person && e.date === date && e.taskId === taskId)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, n);
+}
+
 app.get('/api/kpi', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
 
@@ -140,36 +167,27 @@ app.get('/api/kpi', (req, res) => {
   for (const person of PERSONS) {
     let totalConversations = 0;
     let totalSales = 0;
-
-    for (const date of elapsedDates) {
-      const tasks = store.getTasks(person, date);
-      totalConversations += Number(tasks['new_conv']) || 0;
-      if (tasks['monoline']) totalSales++;
-      if (tasks['bundle'])   totalSales++;
-    }
-
-    // Deduplicate log entries per (date, taskId) — keep most recent
-    const saleMap = new Map();
-    for (const entry of allLog) {
-      if (entry.person !== person) continue;
-      if (entry.date < SALES_MONTH_START || entry.date > periodEnd) continue;
-      if (entry.taskId !== 'monoline' && entry.taskId !== 'bundle') continue;
-      const key = `${entry.date}-${entry.taskId}`;
-      const existing = saleMap.get(key);
-      if (!existing || entry.timestamp > existing.timestamp) saleMap.set(key, entry);
-    }
-
     let totalPremium = 0;
     let totalPolicies = 0;
     let totalHouseholds = 0;
 
-    for (const entry of saleMap.values()) {
-      if (entry.premium) {
-        const amt = parseFloat(String(entry.premium).replace(/[$,\s]/g, ''));
-        if (!isNaN(amt)) totalPremium += amt;
+    for (const date of elapsedDates) {
+      const tasks = store.getTasks(person, date);
+      totalConversations += Number(tasks['new_conv']) || 0;
+      const monoCount   = Number(tasks['monoline']) || 0;
+      const bundleCount = Number(tasks['bundle'])   || 0;
+      totalSales += monoCount + bundleCount;
+
+      for (const [taskId, count] of [['monoline', monoCount], ['bundle', bundleCount]]) {
+        for (const e of getSaleEntries(allLog, person, date, taskId, count)) {
+          if (e.premium) {
+            const amt = parseFloat(String(e.premium).replace(/[$,\s]/g, ''));
+            if (!isNaN(amt)) totalPremium += amt;
+          }
+          totalPolicies += e.numPolicies != null ? Number(e.numPolicies) : 1;
+          if (e.newHousehold) totalHouseholds++;
+        }
       }
-      totalPolicies += entry.numPolicies != null ? Number(entry.numPolicies) : 1;
-      if (entry.newHousehold) totalHouseholds++;
     }
 
     // premiumPace: projected total for the full sales month at current working-day rate
@@ -222,6 +240,53 @@ app.post('/api/task', (req, res) => {
   } else if (!completed) {
     store.setClientName(person, taskId, date, null);
   }
+
+  io.emit('refresh');
+  res.json({ success: true });
+});
+
+app.post('/api/sale', (req, res) => {
+  const { person, taskId, date, clientName, premium, numPolicies, newHousehold } = req.body;
+
+  const tasks = store.getTasks(person, date);
+  const current = Number(tasks[taskId]) || 0;
+  store.setTask(person, taskId, date, current + 1);
+
+  const now = new Date();
+  const entry = {
+    person,
+    personName: PERSON_NAMES[person] || person,
+    taskId,
+    taskLabel: TASK_LABELS[taskId] || taskId,
+    clientName,
+    date,
+    time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    timestamp: now.getTime(),
+  };
+  if (premium != null) entry.premium = premium;
+  if (numPolicies != null) entry.numPolicies = numPolicies;
+  if (newHousehold != null) entry.newHousehold = newHousehold;
+  store.addLogEntry(entry);
+
+  io.emit('refresh');
+  res.json({ success: true });
+});
+
+app.post('/api/sale/decrement', (req, res) => {
+  const { person, taskId, date } = req.body;
+
+  const allLog = store.getLog();
+  const match = allLog
+    .filter(e => e.person === person && e.date === date && e.taskId === taskId)
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+
+  if (!match) return res.status(404).json({ error: 'No entry to remove' });
+
+  store.deleteLogEntry(match.id);
+
+  const tasks = store.getTasks(person, date);
+  const current = Number(tasks[taskId]) || 0;
+  store.setTask(person, taskId, date, Math.max(0, current - 1));
 
   io.emit('refresh');
   res.json({ success: true });

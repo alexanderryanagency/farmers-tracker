@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import KPIStrip from './KPIStrip';
 
+function fmt$(n) {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${Math.round(n)}`;
+}
+
 const TASKS = [
   { id: 'new_conv',  label: 'New Conversations', type: 'dropdown', verified: false },
   { id: 'ghost_5',   label: '5 Ghost Quotes',    points: 3,  verified: false },
   { id: 'ghost_10',  label: '10 Ghost Quotes',   points: 5,  verified: false },
   { id: 'referral',  label: 'Referral Received', points: 10, verified: true  },
-  { id: 'monoline',  label: 'Monoline Sale',     points: 3,  verified: true  },
-  { id: 'bundle',    label: 'Bundle Sale',       points: 5,  verified: true  },
+  { id: 'monoline',  label: 'Monoline Sale',     points: 3,  verified: true, type: 'counter' },
+  { id: 'bundle',    label: 'Bundle Sale',       points: 5,  verified: true, type: 'counter' },
   { id: 'life_app',  label: 'Life App Sent',     points: 5,  verified: true  },
   { id: 'life_sale', label: 'Life Sale',         points: 20, verified: true  },
 ];
@@ -32,13 +37,13 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
   const [premiumInput, setPremiumInput]   = useState('');
   const [numPoliciesInput, setNumPoliciesInput] = useState('');
   const [newHousehold, setNewHousehold]   = useState(false);
+  const [pendingDecrementTask, setPendingDecrementTask] = useState(null);
   const winTimer       = useRef(null);
   const challengeTimer = useRef(null);
   const numPoliciesRef = useRef(null);
 
   const personData = weekData?.data[person.id];
 
-  // Sync win/challenge when date or remote data changes
   useEffect(() => {
     setWinValue(personData?.wins?.[selectedDate] || '');
     setChallengeValue(personData?.challenges?.[selectedDate] || '');
@@ -46,19 +51,40 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
 
   if (!weekData || !personData) return null;
 
-  const { weekDates, weekKey } = weekData;
+  const { weekDates } = weekData;
   const todayTasks = personData.tasks[selectedDate] || {};
   const convCount  = Number(todayTasks['new_conv']) || 0;
   const dayPoints  = TASKS.reduce((s, t) => {
     if (t.id === 'new_conv') return s + getNewConvPoints(convCount);
+    if (t.type === 'counter') return s + (Number(todayTasks[t.id]) || 0) * t.points;
     return s + (todayTasks[t.id] ? t.points : 0);
   }, 0);
+
+  const dailySales = personData.dailySales?.[selectedDate] || { premium: 0, policies: 0, households: 0 };
 
   async function performToggle(taskId, completed, clientName, saleDetails = null) {
     await fetch('/api/task', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ person: person.id, taskId, date: selectedDate, completed, clientName, ...saleDetails }),
+    });
+    onRefresh();
+  }
+
+  async function performSaleAdd(taskId, clientName, saleDetails = {}) {
+    await fetch('/api/sale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ person: person.id, taskId, date: selectedDate, clientName, ...saleDetails }),
+    });
+    onRefresh();
+  }
+
+  async function performSaleDecrement(taskId) {
+    await fetch('/api/sale/decrement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ person: person.id, taskId, date: selectedDate }),
     });
     onRefresh();
   }
@@ -74,7 +100,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
   }
 
   function handleTaskClick(task) {
-    if (task.id === 'new_conv') return;
+    if (task.id === 'new_conv' || task.type === 'counter') return;
     const done = todayTasks[task.id] || false;
     if (!done && task.verified) {
       setPendingTask(task);
@@ -106,14 +132,13 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
     const saleDetails = { newHousehold };
     if (premiumInput.trim()) saleDetails.premium = premiumInput.trim();
     if (numPoliciesInput.trim()) saleDetails.numPolicies = Number(numPoliciesInput);
-    await performToggle(task.id, true, clientName, saleDetails);
+    await performSaleAdd(task.id, clientName, saleDetails);
     setPendingSaleDetails(null);
     setPremiumInput('');
     setNumPoliciesInput('');
     setNewHousehold(false);
   }
 
-  // ── win / challenge auto-save ──
   function handleWinChange(e) {
     const val = e.target.value;
     setWinValue(val);
@@ -177,6 +202,24 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
         })}
       </div>
 
+      {/* Daily totals — producers only */}
+      {person.role === 'Producer' && (
+        <div className="daily-totals-strip">
+          <div className="daily-total-card">
+            <span className="dt-label">Today's Premium</span>
+            <span className="dt-value">{fmt$(dailySales.premium)}</span>
+          </div>
+          <div className="daily-total-card">
+            <span className="dt-label">Policies</span>
+            <span className="dt-value">{dailySales.policies}</span>
+          </div>
+          <div className="daily-total-card">
+            <span className="dt-label">Households</span>
+            <span className="dt-value">{dailySales.households}</span>
+          </div>
+        </div>
+      )}
+
       {/* Two-column content */}
       <div className="tab-content">
 
@@ -216,6 +259,37 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
                     <option value="5">5</option>
                   </select>
                   <span className="task-pts">+{getNewConvPoints(convCount)}</span>
+                </div>
+              );
+            }
+
+            if (task.type === 'counter') {
+              const count = Number(todayTasks[task.id]) || 0;
+              const isConfirming = pendingDecrementTask?.taskId === task.id;
+              return (
+                <div key={task.id} className={`task-item task-counter verified ${count > 0 ? 'done' : ''}`}>
+                  <div className="task-label-wrap">
+                    <span className="task-label">
+                      {task.label}{count > 0 ? ` × ${count}` : ''}
+                    </span>
+                  </div>
+                  <span className="task-pts">+{count > 0 ? count * task.points : task.points}</span>
+                  <div className="counter-controls">
+                    {isConfirming ? (
+                      <>
+                        <span className="counter-sure">Sure?</span>
+                        <button className="counter-yes" onClick={() => { performSaleDecrement(task.id); setPendingDecrementTask(null); }}>Yes</button>
+                        <button className="counter-no" onClick={() => setPendingDecrementTask(null)}>No</button>
+                      </>
+                    ) : (
+                      <>
+                        {count > 0 && (
+                          <button className="counter-btn counter-minus" onClick={() => setPendingDecrementTask({ taskId: task.id })}>−</button>
+                        )}
+                        <button className="counter-btn counter-plus" onClick={() => { setPendingDecrementTask(null); setPendingTask(task); setClientInput(''); }}>+</button>
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             }
