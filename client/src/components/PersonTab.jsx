@@ -388,26 +388,29 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
             <div className="verify-title">
               {saleModal.mode === 'new' ? `+${saleModal.task.points} pts — Sale Details` : 'Edit Sale Details'}
             </div>
+            <label className="verify-field-label">Premium ($)</label>
             <input
               className="verify-input"
               type="text"
-              placeholder="Premium amount (e.g. $1,200)"
+              placeholder="e.g. $1,200"
               value={premiumInput}
               onChange={e => setPremiumInput(e.target.value)}
               autoFocus
             />
+            <label className="verify-field-label"># of Policies</label>
             <input
               className="verify-input"
               type="number"
-              placeholder="Number of policies"
+              placeholder="0"
               value={numPoliciesInput}
               onChange={e => setNumPoliciesInput(e.target.value)}
               min="1"
             />
+            <label className="verify-field-label"># of Households</label>
             <input
               className="verify-input"
               type="number"
-              placeholder="Number of households"
+              placeholder="0"
               value={numHouseholdsInput}
               onChange={e => setNumHouseholdsInput(e.target.value)}
               min="1"

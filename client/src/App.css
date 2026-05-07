@@ -863,6 +863,12 @@ html, body {
   font-size: 20px; font-weight: 900; color: #ffffff;
   letter-spacing: -0.3px; margin-top: -4px;
 }
+.verify-field-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--t2);
+  margin-bottom: -8px;
+}
+
 .verify-input {
   padding: 13px 14px;
   background: var(--s2); border: 1px solid var(--border);
