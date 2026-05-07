@@ -344,11 +344,29 @@ html, body {
   text-transform: uppercase; letter-spacing: 0.8px;
 }
 
-/* Date strip */
-.date-selector {
-  display: flex; flex-shrink: 0;
-  background: var(--bg);
+/* Date strip with week nav */
+.date-strip-wrap {
+  display: flex; align-items: stretch;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.week-nav-btn {
+  width: 32px; flex-shrink: 0;
+  background: none; border: none; border-right: 1px solid var(--border);
+  color: var(--t2); font-size: 22px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.week-nav-right { border-left: 1px solid var(--border); border-right: none; }
+.week-nav-btn:hover:not(:disabled) { color: #fff; background: var(--s2); }
+.week-nav-btn:disabled { opacity: 0.18; cursor: default; }
+
+.date-selector {
+  flex: 1;
+  display: flex;
+  background: var(--bg);
   overflow-x: auto; scrollbar-width: none;
 }
 .date-selector::-webkit-scrollbar { display: none; }
@@ -746,67 +764,60 @@ html, body {
 .task-label-wrap { flex: 1; display: flex; flex-direction: column; gap: 1px; text-align: left; min-width: 0; }
 .task-client { font-size: 10px; color: var(--gold); font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Counter task (monoline / bundle) */
-.task-item.task-counter { cursor: default; }
-.task-item.task-counter:active { transform: none; }
-
-.counter-controls {
-  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
-}
-.counter-btn {
-  width: 30px; height: 30px;
-  border-radius: 7px; border: 1.5px solid var(--border);
-  background: var(--s2); color: #ffffff;
-  font-size: 18px; font-weight: 700; line-height: 1;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: border-color 0.1s, background 0.1s;
-  -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
-}
-.counter-btn:hover { border-color: var(--bh); background: var(--s3); }
-.counter-btn:active { transform: scale(0.92); }
-.counter-plus { border-color: rgba(255,184,0,0.3); color: var(--gold); }
-.counter-plus:hover { border-color: rgba(255,184,0,0.6); background: rgba(255,184,0,0.08); }
-.counter-minus { border-color: rgba(204,0,0,0.3); color: var(--red); }
-.counter-minus:hover { border-color: var(--red); background: rgba(204,0,0,0.08); }
-
-.counter-sure { font-size: 11px; font-weight: 700; color: var(--t2); }
-.counter-yes {
-  padding: 5px 10px; border-radius: 6px;
-  background: var(--red); border: none;
-  color: #fff; font-size: 11px; font-weight: 700; cursor: pointer;
-}
-.counter-no {
-  padding: 5px 10px; border-radius: 6px;
-  background: transparent; border: 1px solid var(--border);
-  color: var(--t2); font-size: 11px; font-weight: 700; cursor: pointer;
-}
-
-/* Daily totals strip */
-.daily-totals-strip {
-  display: flex; gap: 8px;
-  padding: 8px 10px;
-  background: var(--s1);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.daily-total-card {
-  flex: 1;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 10px 6px;
+/* Today's Sales card */
+.sales-day-card {
+  margin: 8px 10px;
+  padding: 10px 14px 12px;
   background: var(--s2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
-.dt-label {
-  font-size: 8px; font-weight: 800;
-  text-transform: uppercase; letter-spacing: 1px;
-  color: var(--t3); white-space: nowrap;
+.sales-day-card:hover { border-color: var(--bh); background: var(--s3); }
+.sales-day-card:active { transform: scale(0.99); }
+.sales-day-card.has-data { border-color: rgba(255,184,0,0.22); background: rgba(255,184,0,0.04); }
+.sales-day-card.has-data:hover { border-color: rgba(255,184,0,0.45); background: rgba(255,184,0,0.08); }
+
+.sdc-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
 }
-.dt-value {
-  font-size: 20px; font-weight: 900;
+.sdc-label {
+  font-size: 9px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 1.8px; color: var(--t2);
+}
+.sales-day-card.has-data .sdc-label { color: var(--gold); }
+.sdc-edit-hint {
+  font-size: 10px; font-weight: 700; color: var(--t3);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.sales-day-card.has-data .sdc-edit-hint { color: rgba(255,184,0,0.6); }
+
+.sdc-empty {
+  font-size: 12px; color: var(--t3);
+}
+
+.sdc-values {
+  display: flex; align-items: center; gap: 0;
+}
+.sdc-stat {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.sdc-num {
+  font-size: 22px; font-weight: 900;
   letter-spacing: -0.5px; line-height: 1;
   color: #ffffff; font-variant-numeric: tabular-nums;
+}
+.sdc-unit {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.8px; color: var(--t3);
+}
+.sdc-divider {
+  width: 1px; height: 32px; background: var(--border); flex-shrink: 0;
 }
 
 /* ════════════════════════════

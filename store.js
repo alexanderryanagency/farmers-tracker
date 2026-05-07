@@ -11,6 +11,7 @@ let state = {
   challenges: {},
   clients: {},
   log: [],
+  salesDays: {},
 };
 
 if (fs.existsSync(FILE)) {
@@ -92,6 +93,16 @@ module.exports = {
   },
   getChallenge(person, date) {
     return state.challenges[person]?.[date] || '';
+  },
+
+  // Daily sales records (one per producer per day)
+  setSalesDay(person, date, data) {
+    if (!state.salesDays[person]) state.salesDays[person] = {};
+    state.salesDays[person][date] = data;
+    save();
+  },
+  getSalesDay(person, date) {
+    return state.salesDays?.[person]?.[date] || null;
   },
 
   // Legacy habits/notes (kept for data compat, unused in UI)

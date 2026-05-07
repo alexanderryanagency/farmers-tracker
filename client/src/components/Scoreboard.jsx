@@ -13,25 +13,22 @@ function buildTeamKpi(people, kpiData) {
   if (pkpis.length === 0) return null;
 
   const totalConv    = pkpis.reduce((s, k) => s + k.totalConversations, 0);
-  const totalSales   = pkpis.reduce((s, k) => s + k.totalSales, 0);
   const totalPol     = pkpis.reduce((s, k) => s + k.totalPolicies, 0);
   const totalHH      = pkpis.reduce((s, k) => s + k.totalHouseholds, 0);
   const totalPremium = pkpis.reduce((s, k) => s + k.totalPremium, 0);
+  const totalActive  = pkpis.reduce((s, k) => s + (k.activeDays || 0), 0);
   const { workingDaysElapsed, workingDaysTotal } = pkpis[0];
 
   return {
     totalConversations: totalConv,
-    totalSales,
     totalPolicies: totalPol,
     totalHouseholds: totalHH,
     totalPremium,
     workingDaysElapsed,
     workingDaysTotal,
-    // Average Conv/Day across both producers using working days
-    avgConvPerDay: workingDaysElapsed > 0 ? totalConv / (pkpis.length * workingDaysElapsed) : 0,
-    closeRate:     totalConv > 0 ? (totalSales / totalConv) * 100 : 0,
-    policiesPerHH: totalSales > 0 ? totalPol / totalSales : 0,
-    // Sum each producer's pace (already working-day adjusted)
+    avgConvPerDay: totalActive > 0 ? totalConv / totalActive : 0,
+    closeRate:     totalConv > 0 ? (totalHH / totalConv) * 100 : 0,
+    policiesPerHH: totalHH > 0 ? totalPol / totalHH : 0,
     premiumPace:   pkpis.reduce((s, k) => s + k.premiumPace, 0),
   };
 }

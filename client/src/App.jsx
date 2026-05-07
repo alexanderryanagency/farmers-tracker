@@ -26,20 +26,22 @@ function TrophyIcon() {
   );
 }
 
-function LockIcon() {
+function ClipboardIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect width="6" height="4" x="9" y="3" rx="1" ry="1" />
+      <path d="M9 12h6M9 16h4" />
     </svg>
   );
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('scoreboard');
-  const [weekData, setWeekData] = useState(null);
-  const [kpiData, setKpiData]   = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [weekData, setWeekData]   = useState(null);
+  const [kpiData, setKpiData]     = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
   const today = new Date().toISOString().split('T')[0];
 
   const fetchData = useCallback(async () => {
@@ -51,6 +53,7 @@ export default function App() {
       const [week, kpi] = await Promise.all([weekRes.json(), kpiRes.json()]);
       setWeekData(week);
       setKpiData(kpi);
+      setRefreshTick(t => t + 1);
     } catch (err) {
       console.error('Failed to fetch:', err);
     } finally {
@@ -105,8 +108,8 @@ export default function App() {
           className={`tab-btn ${activeTab === 'log' ? 'active' : ''}`}
           onClick={() => setActiveTab('log')}
         >
-          <span className="tab-icon"><LockIcon /></span>
-          <span className="tab-label">Log</span>
+          <span className="tab-icon"><ClipboardIcon /></span>
+          <span className="tab-label">Sales Log</span>
         </button>
       </nav>
 
@@ -119,10 +122,10 @@ export default function App() {
             <PersonTab
               key={person.id}
               person={person}
-              weekData={weekData}
               today={today}
               onRefresh={fetchData}
               kpiData={kpiData}
+              refreshTick={refreshTick}
             />
           )
         )}

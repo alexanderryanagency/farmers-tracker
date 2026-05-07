@@ -1,9 +1,31 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import KPIStrip from './KPIStrip';
 
 function fmt$(n) {
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-  return `$${Math.round(n)}`;
+  if (!n) return '$0';
+  const num = parseFloat(String(n).replace(/[$,\s]/g, ''));
+  if (isNaN(num) || num === 0) return '$0';
+  if (num >= 1000) return `$${(num / 1000).toFixed(1)}k`;
+  return `$${Math.round(num)}`;
+}
+
+function fmtDate(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getMonday(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const m = new Date(d);
+  m.setUTCDate(d.getUTCDate() + diff);
+  return m.toISOString().split('T')[0];
+}
+
+function shiftDate(dateStr, days) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
 }
 
 const TASKS = [
@@ -11,8 +33,6 @@ const TASKS = [
   { id: 'ghost_5',   label: '5 Ghost Quotes',    points: 3,  verified: false },
   { id: 'ghost_10',  label: '10 Ghost Quotes',   points: 5,  verified: false },
   { id: 'referral',  label: 'Referral Received', points: 10, verified: true  },
-  { id: 'monoline',  label: 'Monoline Sale',     points: 3,  verified: true, type: 'counter' },
-  { id: 'bundle',    label: 'Bundle Sale',       points: 5,  verified: true, type: 'counter' },
   { id: 'life_app',  label: 'Life App Sent',     points: 5,  verified: true  },
   { id: 'life_sale', label: 'Life Sale',         points: 20, verified: true  },
 ];
@@ -27,20 +47,29 @@ function getNewConvPoints(count) {
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-export default function PersonTab({ person, weekData, today, onRefresh, kpiData }) {
+export default function PersonTab({ person, today, onRefresh, kpiData, refreshTick }) {
+  const [viewDate, setViewDate]   = useState(today);
+  const [weekData, setWeekData]   = useState(null);
   const [selectedDate, setSelectedDate] = useState(today);
-  const [winValue, setWinValue]           = useState('');
+  const [winValue, setWinValue]   = useState('');
   const [challengeValue, setChallengeValue] = useState('');
-  const [pendingTask, setPendingTask]     = useState(null);
-  const [clientInput, setClientInput]     = useState('');
-  const [pendingSaleDetails, setPendingSaleDetails] = useState(null);
-  const [premiumInput, setPremiumInput]   = useState('');
-  const [numPoliciesInput, setNumPoliciesInput] = useState('');
-  const [newHousehold, setNewHousehold]   = useState(false);
-  const [pendingDecrementTask, setPendingDecrementTask] = useState(null);
+  const [pendingTask, setPendingTask] = useState(null);
+  const [clientInput, setClientInput] = useState('');
+  const [showSalesModal, setShowSalesModal] = useState(false);
+  const [salePremium, setSalePremium]     = useState('');
+  const [salePolicies, setSalePolicies]   = useState('');
+  const [saleHouseholds, setSaleHouseholds] = useState('');
   const winTimer       = useRef(null);
   const challengeTimer = useRef(null);
-  const numPoliciesRef = useRef(null);
+
+  const fetchWeekData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/week?date=${viewDate}`);
+      setWeekData(await res.json());
+    } catch {}
+  }, [viewDate]);
+
+  useEffect(() => { fetchWeekData(); }, [fetchWeekData, refreshTick]);
 
   const personData = weekData?.data[person.id];
 
@@ -56,87 +85,73 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
   const convCount  = Number(todayTasks['new_conv']) || 0;
   const dayPoints  = TASKS.reduce((s, t) => {
     if (t.id === 'new_conv') return s + getNewConvPoints(convCount);
-    if (t.type === 'counter') return s + (Number(todayTasks[t.id]) || 0) * t.points;
     return s + (todayTasks[t.id] ? t.points : 0);
   }, 0);
 
-  const dailySales = personData.dailySales?.[selectedDate] || { premium: 0, policies: 0, households: 0 };
+  const salesDay = personData.salesDay?.[selectedDate] || null;
+  const isCurrentWeek = getMonday(viewDate) >= getMonday(today);
+  const dateLabel = selectedDate === today ? "Today's Sales" : `Sales · ${fmtDate(selectedDate)}`;
 
-  async function performToggle(taskId, completed, clientName, saleDetails = null) {
-    await fetch('/api/task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person: person.id, taskId, date: selectedDate, completed, clientName, ...saleDetails }),
-    });
-    onRefresh();
+  function navigateWeek(direction) {
+    const newView = shiftDate(viewDate, direction * 7);
+    if (direction > 0 && getMonday(newView) >= getMonday(today)) {
+      setViewDate(today);
+      setSelectedDate(today);
+    } else {
+      setViewDate(newView);
+      setSelectedDate(shiftDate(selectedDate, direction * 7));
+    }
   }
 
-  async function performSaleAdd(taskId, clientName, saleDetails = {}) {
-    await fetch('/api/sale', {
+  async function save(url, body) {
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person: person.id, taskId, date: selectedDate, clientName, ...saleDetails }),
+      body: JSON.stringify(body),
     });
     onRefresh();
-  }
-
-  async function performSaleDecrement(taskId) {
-    await fetch('/api/sale/decrement', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person: person.id, taskId, date: selectedDate }),
-    });
-    onRefresh();
+    fetchWeekData();
   }
 
   async function handleConvChange(value) {
     const count = value ? Number(value) : false;
-    await fetch('/api/task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person: person.id, taskId: 'new_conv', date: selectedDate, completed: count || false, clientName: null }),
-    });
-    onRefresh();
+    await save('/api/task', { person: person.id, taskId: 'new_conv', date: selectedDate, completed: count || false, clientName: null });
   }
 
   function handleTaskClick(task) {
-    if (task.id === 'new_conv' || task.type === 'counter') return;
+    if (task.id === 'new_conv') return;
     const done = todayTasks[task.id] || false;
     if (!done && task.verified) {
       setPendingTask(task);
       setClientInput('');
     } else {
-      performToggle(task.id, !done, null);
+      save('/api/task', { person: person.id, taskId: task.id, date: selectedDate, completed: !done, clientName: null });
     }
   }
 
   async function confirmVerification() {
     if (!clientInput.trim() || !pendingTask) return;
-    if (pendingTask.id === 'monoline' || pendingTask.id === 'bundle') {
-      setPendingSaleDetails({ task: pendingTask, clientName: clientInput.trim() });
-      setPendingTask(null);
-      setClientInput('');
-      setPremiumInput('');
-      setNumPoliciesInput('');
-      setNewHousehold(false);
-      return;
-    }
-    await performToggle(pendingTask.id, true, clientInput.trim());
+    await save('/api/task', { person: person.id, taskId: pendingTask.id, date: selectedDate, completed: true, clientName: clientInput.trim() });
     setPendingTask(null);
     setClientInput('');
   }
 
-  async function confirmSaleDetails() {
-    if (!pendingSaleDetails) return;
-    const { task, clientName } = pendingSaleDetails;
-    const saleDetails = { newHousehold };
-    if (premiumInput.trim()) saleDetails.premium = premiumInput.trim();
-    if (numPoliciesInput.trim()) saleDetails.numPolicies = Number(numPoliciesInput);
-    await performSaleAdd(task.id, clientName, saleDetails);
-    setPendingSaleDetails(null);
-    setPremiumInput('');
-    setNumPoliciesInput('');
-    setNewHousehold(false);
+  function openSalesModal() {
+    setSalePremium(salesDay?.premium ?? '');
+    setSalePolicies(salesDay?.policies != null ? String(salesDay.policies) : '');
+    setSaleHouseholds(salesDay?.households != null ? String(salesDay.households) : '');
+    setShowSalesModal(true);
+  }
+
+  async function saveSalesDay() {
+    await save('/api/sales-day', {
+      person: person.id,
+      date: selectedDate,
+      premium:    salePremium.trim()    || null,
+      policies:   salePolicies.trim()   ? Number(salePolicies)   : null,
+      households: saleHouseholds.trim() ? Number(saleHouseholds) : null,
+    });
+    setShowSalesModal(false);
   }
 
   function handleWinChange(e) {
@@ -144,11 +159,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
     setWinValue(val);
     clearTimeout(winTimer.current);
     winTimer.current = setTimeout(() => {
-      fetch('/api/daily', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ person: person.id, date: selectedDate, win: val }),
-      }).then(() => onRefresh());
+      save('/api/daily', { person: person.id, date: selectedDate, win: val });
     }, 600);
   }
 
@@ -157,11 +168,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
     setChallengeValue(val);
     clearTimeout(challengeTimer.current);
     challengeTimer.current = setTimeout(() => {
-      fetch('/api/daily', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ person: person.id, date: selectedDate, challenge: val }),
-      }).then(() => onRefresh());
+      save('/api/daily', { person: person.id, date: selectedDate, challenge: val });
     }, 600);
   }
 
@@ -185,38 +192,54 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
         <KPIStrip kpi={kpiData?.data?.[person.id]} hero />
       )}
 
-      {/* Date strip */}
-      <div className="date-selector">
-        {weekDates.map((date, i) => {
-          const dayNum = new Date(date + 'T12:00:00').getDate();
-          return (
-            <button
-              key={date}
-              className={`date-btn ${date === selectedDate ? 'selected' : ''} ${date === today ? 'today' : ''}`}
-              onClick={() => setSelectedDate(date)}
-            >
-              <span className="day-name">{DAYS[i]}</span>
-              <span className="day-num">{dayNum}</span>
-            </button>
-          );
-        })}
+      {/* Date strip with week navigation */}
+      <div className="date-strip-wrap">
+        <button className="week-nav-btn" onClick={() => navigateWeek(-1)}>‹</button>
+        <div className="date-selector">
+          {weekDates.map((date, i) => {
+            const dayNum = new Date(date + 'T12:00:00').getDate();
+            return (
+              <button
+                key={date}
+                className={`date-btn ${date === selectedDate ? 'selected' : ''} ${date === today ? 'today' : ''}`}
+                onClick={() => setSelectedDate(date)}
+              >
+                <span className="day-name">{DAYS[i]}</span>
+                <span className="day-num">{dayNum}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button className="week-nav-btn week-nav-right" onClick={() => navigateWeek(1)} disabled={isCurrentWeek}>›</button>
       </div>
 
-      {/* Daily totals — producers only */}
+      {/* Today's Sales card — producers only */}
       {person.role === 'Producer' && (
-        <div className="daily-totals-strip">
-          <div className="daily-total-card">
-            <span className="dt-label">Today's Premium</span>
-            <span className="dt-value">{fmt$(dailySales.premium)}</span>
+        <div className={`sales-day-card ${salesDay ? 'has-data' : ''}`} onClick={openSalesModal}>
+          <div className="sdc-top">
+            <span className="sdc-label">{dateLabel}</span>
+            <span className="sdc-edit-hint">{salesDay ? 'Edit' : 'Log →'}</span>
           </div>
-          <div className="daily-total-card">
-            <span className="dt-label">Policies</span>
-            <span className="dt-value">{dailySales.policies}</span>
-          </div>
-          <div className="daily-total-card">
-            <span className="dt-label">Households</span>
-            <span className="dt-value">{dailySales.households}</span>
-          </div>
+          {salesDay ? (
+            <div className="sdc-values">
+              <div className="sdc-stat">
+                <span className="sdc-num">{fmt$(salesDay.premium)}</span>
+                <span className="sdc-unit">premium</span>
+              </div>
+              <div className="sdc-divider" />
+              <div className="sdc-stat">
+                <span className="sdc-num">{salesDay.policies ?? 0}</span>
+                <span className="sdc-unit">policies</span>
+              </div>
+              <div className="sdc-divider" />
+              <div className="sdc-stat">
+                <span className="sdc-num">{salesDay.households ?? 0}</span>
+                <span className="sdc-unit">households</span>
+              </div>
+            </div>
+          ) : (
+            <div className="sdc-empty">Tap to log premium, policies &amp; households</div>
+          )}
         </div>
       )}
 
@@ -236,15 +259,10 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
           {TASKS.map(task => {
             if (task.id === 'new_conv') {
               return (
-                <div
-                  key={task.id}
-                  className={`task-item task-conv ${convCount > 0 ? 'done' : ''}`}
-                >
+                <div key={task.id} className={`task-item task-conv ${convCount > 0 ? 'done' : ''}`}>
                   <div className="task-label-wrap">
                     <span className="task-label">{task.label}</span>
-                    {convCount > 0 && (
-                      <span className="task-client">{convCount} recorded</span>
-                    )}
+                    {convCount > 0 && <span className="task-client">{convCount} recorded</span>}
                   </div>
                   <select
                     className="conv-select"
@@ -263,37 +281,6 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
               );
             }
 
-            if (task.type === 'counter') {
-              const count = Number(todayTasks[task.id]) || 0;
-              const isConfirming = pendingDecrementTask?.taskId === task.id;
-              return (
-                <div key={task.id} className={`task-item task-counter verified ${count > 0 ? 'done' : ''}`}>
-                  <div className="task-label-wrap">
-                    <span className="task-label">
-                      {task.label}{count > 0 ? ` × ${count}` : ''}
-                    </span>
-                  </div>
-                  <span className="task-pts">+{count > 0 ? count * task.points : task.points}</span>
-                  <div className="counter-controls">
-                    {isConfirming ? (
-                      <>
-                        <span className="counter-sure">Sure?</span>
-                        <button className="counter-yes" onClick={() => { performSaleDecrement(task.id); setPendingDecrementTask(null); }}>Yes</button>
-                        <button className="counter-no" onClick={() => setPendingDecrementTask(null)}>No</button>
-                      </>
-                    ) : (
-                      <>
-                        {count > 0 && (
-                          <button className="counter-btn counter-minus" onClick={() => setPendingDecrementTask({ taskId: task.id })}>−</button>
-                        )}
-                        <button className="counter-btn counter-plus" onClick={() => { setPendingDecrementTask(null); setPendingTask(task); setClientInput(''); }}>+</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
             const done = todayTasks[task.id] || false;
             const clientName = personData.clients?.[selectedDate]?.[task.id];
             return (
@@ -307,9 +294,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
                 </div>
                 <div className="task-label-wrap">
                   <span className="task-label">{task.label}</span>
-                  {done && clientName && (
-                    <span className="task-client">{clientName}</span>
-                  )}
+                  {done && clientName && <span className="task-client">{clientName}</span>}
                 </div>
                 <span className="task-pts">+{task.points}</span>
               </button>
@@ -317,7 +302,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
           })}
         </div>
 
-        {/* Right: Win + Challenge side by side */}
+        {/* Right: Win + Challenge */}
         <div className="col-right">
           <div className="daily-field win-field">
             <div className="daily-label win-label">Win</div>
@@ -328,7 +313,6 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
               onChange={handleWinChange}
             />
           </div>
-
           <div className="daily-field challenge-field">
             <div className="daily-label challenge-label">Challenge</div>
             <textarea
@@ -341,7 +325,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
         </div>
       </div>
 
-      {/* Verification Modal — client name */}
+      {/* Verification Modal */}
       {pendingTask && (
         <div className="verify-overlay" onClick={e => e.target === e.currentTarget && setPendingTask(null)}>
           <div className="verify-modal">
@@ -358,11 +342,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
             />
             <div className="verify-actions">
               <button className="verify-cancel" onClick={() => setPendingTask(null)}>Cancel</button>
-              <button
-                className="verify-confirm"
-                onClick={confirmVerification}
-                disabled={!clientInput.trim()}
-              >
+              <button className="verify-confirm" onClick={confirmVerification} disabled={!clientInput.trim()}>
                 Confirm +{pendingTask.points} pts
               </button>
             </div>
@@ -370,44 +350,39 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
         </div>
       )}
 
-      {/* Sale Details Modal — premium + policies */}
-      {pendingSaleDetails && (
-        <div className="verify-overlay" onClick={e => e.target === e.currentTarget && setPendingSaleDetails(null)}>
+      {/* Today's Sales Modal */}
+      {showSalesModal && (
+        <div className="verify-overlay" onClick={e => e.target === e.currentTarget && setShowSalesModal(false)}>
           <div className="verify-modal">
-            <div className="verify-task-name">{pendingSaleDetails.task.label}</div>
-            <div className="verify-title">Sale Details</div>
-            <div className="verify-client-chip">{pendingSaleDetails.clientName}</div>
+            <div className="verify-task-name">{fmtDate(selectedDate)}</div>
+            <div className="verify-title">{dateLabel}</div>
             <input
               className="verify-input"
               type="text"
               placeholder="Premium amount (e.g. $1,200)"
-              value={premiumInput}
-              onChange={e => setPremiumInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && numPoliciesRef.current?.focus()}
+              value={salePremium}
+              onChange={e => setSalePremium(e.target.value)}
               autoFocus
             />
             <input
-              ref={numPoliciesRef}
               className="verify-input"
               type="number"
               placeholder="Number of policies"
-              value={numPoliciesInput}
-              onChange={e => setNumPoliciesInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && confirmSaleDetails()}
-              min="1"
+              value={salePolicies}
+              onChange={e => setSalePolicies(e.target.value)}
+              min="0"
             />
-            <div className="verify-toggle-row">
-              <span className="verify-toggle-label">New Household?</span>
-              <div className="verify-toggle">
-                <button type="button" className={`toggle-opt ${!newHousehold ? 'toggle-no' : ''}`} onClick={() => setNewHousehold(false)}>No</button>
-                <button type="button" className={`toggle-opt ${newHousehold ? 'toggle-yes' : ''}`} onClick={() => setNewHousehold(true)}>Yes</button>
-              </div>
-            </div>
+            <input
+              className="verify-input"
+              type="number"
+              placeholder="Number of households"
+              value={saleHouseholds}
+              onChange={e => setSaleHouseholds(e.target.value)}
+              min="0"
+            />
             <div className="verify-actions">
-              <button className="verify-cancel" onClick={() => setPendingSaleDetails(null)}>Cancel</button>
-              <button className="verify-confirm" onClick={confirmSaleDetails}>
-                Confirm +{pendingSaleDetails.task.points} pts
-              </button>
+              <button className="verify-cancel" onClick={() => setShowSalesModal(false)}>Cancel</button>
+              <button className="verify-confirm" onClick={saveSalesDay}>Save</button>
             </div>
           </div>
         </div>

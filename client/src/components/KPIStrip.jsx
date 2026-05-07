@@ -8,7 +8,7 @@ export default function KPIStrip({ kpi, premiumGoal = 30000, hero = false }) {
 
   const convGood  = kpi.avgConvPerDay >= 3;
   const closeGood = kpi.closeRate >= 25;
-  const polGood   = kpi.totalSales > 0 && kpi.policiesPerHH >= 1.5;
+  const polGood   = kpi.totalHouseholds > 0 && kpi.policiesPerHH >= 1.5;
   const premGood  = kpi.premiumPace >= premiumGoal;
 
   const cls = `kpi-strip${hero ? ' kpi-strip--hero' : ''}`;
@@ -33,8 +33,8 @@ export default function KPIStrip({ kpi, premiumGoal = 30000, hero = false }) {
 
       <div className="kpi-card">
         <span className="kpi-label">Pol / HH</span>
-        <span className={`kpi-value ${kpi.totalSales === 0 ? 'kpi-neutral' : polGood ? 'kpi-good' : 'kpi-bad'}`}>
-          {kpi.totalSales > 0 ? kpi.policiesPerHH.toFixed(1) : '—'}
+        <span className={`kpi-value ${kpi.totalHouseholds === 0 ? 'kpi-neutral' : polGood ? 'kpi-good' : 'kpi-bad'}`}>
+          {kpi.totalHouseholds > 0 ? kpi.policiesPerHH.toFixed(1) : '—'}
         </span>
         <span className="kpi-goal">goal: 1.5</span>
       </div>

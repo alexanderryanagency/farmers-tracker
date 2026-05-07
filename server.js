@@ -67,7 +67,6 @@ app.get('/api/week', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
   const weekDates = getWeekDates(today);
   const weekKey = weekDates[0];
-  const allLog = store.getLog();
 
   const data = {};
   for (const person of PERSONS) {
@@ -75,27 +74,14 @@ app.get('/api/week', (req, res) => {
     const wins = {};
     const challenges = {};
     const clients = {};
-    const dailySales = {};
+    const salesDay = {};
 
     for (const date of weekDates) {
       tasks[date] = store.getTasks(person, date);
       wins[date] = store.getWin(person, date);
       challenges[date] = store.getChallenge(person, date);
       clients[date] = store.getClients(person, date);
-
-      let premium = 0, policies = 0, households = 0;
-      for (const taskId of ['monoline', 'bundle']) {
-        const count = Number(tasks[date][taskId]) || 0;
-        for (const e of getSaleEntries(allLog, person, date, taskId, count)) {
-          if (e.premium) {
-            const amt = parseFloat(String(e.premium).replace(/[$,\s]/g, ''));
-            if (!isNaN(amt)) premium += amt;
-          }
-          policies += e.numPolicies != null ? Number(e.numPolicies) : 1;
-          if (e.newHousehold) households++;
-        }
-      }
-      dailySales[date] = { premium, policies, households };
+      salesDay[date] = store.getSalesDay(person, date);
     }
 
     data[person] = {
@@ -103,7 +89,7 @@ app.get('/api/week', (req, res) => {
       wins,
       challenges,
       clients,
-      dailySales,
+      salesDay,
       points: calcWeeklyPoints(person, weekDates),
     };
   }
@@ -133,23 +119,14 @@ function workingDays(dates) {
   }).length;
 }
 
-function getSaleEntries(allLog, person, date, taskId, n) {
-  if (n <= 0) return [];
-  return allLog
-    .filter(e => e.person === person && e.date === date && e.taskId === taskId)
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, n);
-}
-
 app.get('/api/kpi', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
 
-  // Nothing to show before the sales month opens
   if (today < SALES_MONTH_START) {
     const zero = {
-      totalConversations: 0, totalSales: 0, totalPolicies: 0,
+      totalConversations: 0, totalPolicies: 0,
       totalHouseholds: 0, totalPremium: 0,
-      workingDaysElapsed: 0, workingDaysTotal: 0,
+      activeDays: 0, workingDaysElapsed: 0, workingDaysTotal: 0,
       avgConvPerDay: 0, closeRate: 0, policiesPerHH: 0, premiumPace: 0,
     };
     return res.json({ data: Object.fromEntries(PERSONS.map(p => [p, zero])) });
@@ -161,54 +138,47 @@ app.get('/api/kpi', (req, res) => {
   const workingDaysElapsed = workingDays(elapsedDates);
   const workingDaysTotal   = workingDays(fullDates);
 
-  const allLog = store.getLog();
   const result = {};
 
   for (const person of PERSONS) {
     let totalConversations = 0;
-    let totalSales = 0;
+    let activeDays = 0;
     let totalPremium = 0;
     let totalPolicies = 0;
     let totalHouseholds = 0;
 
     for (const date of elapsedDates) {
       const tasks = store.getTasks(person, date);
-      totalConversations += Number(tasks['new_conv']) || 0;
-      const monoCount   = Number(tasks['monoline']) || 0;
-      const bundleCount = Number(tasks['bundle'])   || 0;
-      totalSales += monoCount + bundleCount;
+      const convs = Number(tasks['new_conv']) || 0;
+      totalConversations += convs;
+      if (convs > 0) activeDays++;
 
-      for (const [taskId, count] of [['monoline', monoCount], ['bundle', bundleCount]]) {
-        for (const e of getSaleEntries(allLog, person, date, taskId, count)) {
-          if (e.premium) {
-            const amt = parseFloat(String(e.premium).replace(/[$,\s]/g, ''));
-            if (!isNaN(amt)) totalPremium += amt;
-          }
-          totalPolicies += e.numPolicies != null ? Number(e.numPolicies) : 1;
-          if (e.newHousehold) totalHouseholds++;
+      const sd = store.getSalesDay(person, date);
+      if (sd) {
+        if (sd.premium) {
+          const amt = parseFloat(String(sd.premium).replace(/[$,\s]/g, ''));
+          if (!isNaN(amt)) totalPremium += amt;
         }
+        totalPolicies   += Number(sd.policies)   || 0;
+        totalHouseholds += Number(sd.households) || 0;
       }
     }
 
-    // premiumPace: projected total for the full sales month at current working-day rate
     const premiumPace = workingDaysElapsed > 0
       ? (totalPremium / workingDaysElapsed) * workingDaysTotal
       : 0;
 
     result[person] = {
       totalConversations,
-      totalSales,
       totalPolicies,
       totalHouseholds,
       totalPremium,
+      activeDays,
       workingDaysElapsed,
       workingDaysTotal,
-      // Conv/Day: conversations ÷ working days elapsed
-      avgConvPerDay: workingDaysElapsed > 0 ? totalConversations / workingDaysElapsed : 0,
-      // Close Rate: households closed (sales) ÷ conversations
-      closeRate:     totalConversations > 0 ? (totalSales / totalConversations) * 100 : 0,
-      // Pol/HH: policies ÷ households closed (sales)
-      policiesPerHH: totalSales > 0 ? totalPolicies / totalSales : 0,
+      avgConvPerDay: activeDays > 0 ? totalConversations / activeDays : 0,
+      closeRate:     totalConversations > 0 ? (totalHouseholds / totalConversations) * 100 : 0,
+      policiesPerHH: totalHouseholds > 0 ? totalPolicies / totalHouseholds : 0,
       premiumPace,
     };
   }
@@ -288,6 +258,13 @@ app.post('/api/sale/decrement', (req, res) => {
   const current = Number(tasks[taskId]) || 0;
   store.setTask(person, taskId, date, Math.max(0, current - 1));
 
+  io.emit('refresh');
+  res.json({ success: true });
+});
+
+app.post('/api/sales-day', (req, res) => {
+  const { person, date, premium, policies, households } = req.body;
+  store.setSalesDay(person, date, { premium, policies, households });
   io.emit('refresh');
   res.json({ success: true });
 });

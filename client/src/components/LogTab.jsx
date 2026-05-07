@@ -64,8 +64,8 @@ export default function LogTab() {
       <div className="log-header">
         <div className="log-header-row">
           <div>
-            <div className="log-title">Manager Log</div>
-            <div className="log-subtitle">Verified activity — {log.length} {log.length === 1 ? 'entry' : 'entries'}</div>
+            <div className="log-title">Sales Log</div>
+            <div className="log-subtitle">{log.length} {log.length === 1 ? 'entry' : 'entries'}</div>
           </div>
         </div>
       </div>
