@@ -33,8 +33,10 @@ const TASKS = [
   { id: 'ghost_5',   label: '5 Ghost Quotes',    points: 3,  verified: false },
   { id: 'ghost_10',  label: '10 Ghost Quotes',   points: 5,  verified: false },
   { id: 'referral',  label: 'Referral Received', points: 10, verified: true  },
-  { id: 'life_app',  label: 'Life App Sent',     points: 5,  verified: true  },
-  { id: 'life_sale', label: 'Life Sale',         points: 20, verified: true  },
+  { id: 'monoline',  label: 'Monoline Sale',      points: 3,  verified: true, isSale: true },
+  { id: 'bundle',    label: 'Bundle Sale',         points: 5,  verified: true, isSale: true },
+  { id: 'life_app',  label: 'Life App Sent',       points: 5,  verified: true  },
+  { id: 'life_sale', label: 'Life Sale',            points: 20, verified: true  },
 ];
 
 function getNewConvPoints(count) {
@@ -53,12 +55,17 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
   const [selectedDate, setSelectedDate] = useState(today);
   const [winValue, setWinValue]   = useState('');
   const [challengeValue, setChallengeValue] = useState('');
+
+  // Client name verification step
   const [pendingTask, setPendingTask] = useState(null);
   const [clientInput, setClientInput] = useState('');
-  const [showSalesModal, setShowSalesModal] = useState(false);
-  const [salePremium, setSalePremium]     = useState('');
-  const [salePolicies, setSalePolicies]   = useState('');
-  const [saleHouseholds, setSaleHouseholds] = useState('');
+
+  // Sale details modal (new or edit)
+  const [saleModal, setSaleModal] = useState(null); // { mode: 'new'|'edit', task, clientName }
+  const [premiumInput, setPremiumInput] = useState('');
+  const [numPoliciesInput, setNumPoliciesInput] = useState('');
+  const [numHouseholdsInput, setNumHouseholdsInput] = useState('');
+
   const winTimer       = useRef(null);
   const challengeTimer = useRef(null);
 
@@ -85,12 +92,11 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
   const convCount  = Number(todayTasks['new_conv']) || 0;
   const dayPoints  = TASKS.reduce((s, t) => {
     if (t.id === 'new_conv') return s + getNewConvPoints(convCount);
+    if (!t.points) return s;
     return s + (todayTasks[t.id] ? t.points : 0);
   }, 0);
 
-  const salesDay = personData.salesDay?.[selectedDate] || null;
   const isCurrentWeek = getMonday(viewDate) >= getMonday(today);
-  const dateLabel = selectedDate === today ? "Today's Sales" : `Sales · ${fmtDate(selectedDate)}`;
 
   function navigateWeek(direction) {
     const newView = shiftDate(viewDate, direction * 7);
@@ -103,9 +109,9 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
     }
   }
 
-  async function save(url, body) {
+  async function save(url, body, method = 'POST') {
     await fetch(url, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
@@ -120,38 +126,79 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
 
   function handleTaskClick(task) {
     if (task.id === 'new_conv') return;
-    const done = todayTasks[task.id] || false;
+    const done = !!todayTasks[task.id];
     if (!done && task.verified) {
+      // Step 1: client name
       setPendingTask(task);
       setClientInput('');
+    } else if (done) {
+      // Uncheck
+      save('/api/task', { person: person.id, taskId: task.id, date: selectedDate, completed: false, clientName: null });
     } else {
-      save('/api/task', { person: person.id, taskId: task.id, date: selectedDate, completed: !done, clientName: null });
+      save('/api/task', { person: person.id, taskId: task.id, date: selectedDate, completed: true, clientName: null });
     }
   }
 
-  async function confirmVerification() {
+  function confirmVerification() {
     if (!clientInput.trim() || !pendingTask) return;
-    await save('/api/task', { person: person.id, taskId: pendingTask.id, date: selectedDate, completed: true, clientName: clientInput.trim() });
-    setPendingTask(null);
-    setClientInput('');
+    if (pendingTask.isSale) {
+      // Step 2: open sale details modal
+      setSaleModal({ mode: 'new', task: pendingTask, clientName: clientInput.trim() });
+      setPremiumInput('');
+      setNumPoliciesInput('');
+      setNumHouseholdsInput('');
+      setPendingTask(null);
+      setClientInput('');
+    } else {
+      save('/api/task', {
+        person: person.id,
+        taskId: pendingTask.id,
+        date: selectedDate,
+        completed: true,
+        clientName: clientInput.trim(),
+      });
+      setPendingTask(null);
+      setClientInput('');
+    }
   }
 
-  function openSalesModal() {
-    setSalePremium(salesDay?.premium ?? '');
-    setSalePolicies(salesDay?.policies != null ? String(salesDay.policies) : '');
-    setSaleHouseholds(salesDay?.households != null ? String(salesDay.households) : '');
-    setShowSalesModal(true);
+  function openSaleEdit(task) {
+    const details = personData.saleDetails?.[selectedDate]?.[task.id] || {};
+    setSaleModal({ mode: 'edit', task });
+    setPremiumInput(details.premium ?? '');
+    setNumPoliciesInput(details.numPolicies != null ? String(details.numPolicies) : '');
+    setNumHouseholdsInput(details.numHouseholds != null ? String(details.numHouseholds) : '');
   }
 
-  async function saveSalesDay() {
-    await save('/api/sales-day', {
-      person: person.id,
-      date: selectedDate,
-      premium:    salePremium.trim()    || null,
-      policies:   salePolicies.trim()   ? Number(salePolicies)   : null,
-      households: saleHouseholds.trim() ? Number(saleHouseholds) : null,
-    });
-    setShowSalesModal(false);
+  async function confirmSaleDetails() {
+    if (!saleModal) return;
+    const { mode, task, clientName } = saleModal;
+    const premium      = premiumInput.trim() || null;
+    const numPolicies  = numPoliciesInput.trim()  ? Number(numPoliciesInput)  : null;
+    const numHouseholds = numHouseholdsInput.trim() ? Number(numHouseholdsInput) : null;
+
+    if (mode === 'new') {
+      await save('/api/task', {
+        person: person.id,
+        taskId: task.id,
+        date: selectedDate,
+        completed: true,
+        clientName,
+        premium,
+        numPolicies,
+        numHouseholds,
+      });
+    } else {
+      await save('/api/sale-details', {
+        person: person.id,
+        taskId: task.id,
+        date: selectedDate,
+        premium,
+        numPolicies,
+        numHouseholds,
+      }, 'PATCH');
+    }
+    setSaleModal(null);
   }
 
   function handleWinChange(e) {
@@ -213,36 +260,6 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
         <button className="week-nav-btn week-nav-right" onClick={() => navigateWeek(1)} disabled={isCurrentWeek}>›</button>
       </div>
 
-      {/* Today's Sales card — producers only */}
-      {person.role === 'Producer' && (
-        <div className={`sales-day-card ${salesDay ? 'has-data' : ''}`} onClick={openSalesModal}>
-          <div className="sdc-top">
-            <span className="sdc-label">{dateLabel}</span>
-            <span className="sdc-edit-hint">{salesDay ? 'Edit' : 'Log →'}</span>
-          </div>
-          {salesDay ? (
-            <div className="sdc-values">
-              <div className="sdc-stat">
-                <span className="sdc-num">{fmt$(salesDay.premium)}</span>
-                <span className="sdc-unit">premium</span>
-              </div>
-              <div className="sdc-divider" />
-              <div className="sdc-stat">
-                <span className="sdc-num">{salesDay.policies ?? 0}</span>
-                <span className="sdc-unit">policies</span>
-              </div>
-              <div className="sdc-divider" />
-              <div className="sdc-stat">
-                <span className="sdc-num">{salesDay.households ?? 0}</span>
-                <span className="sdc-unit">households</span>
-              </div>
-            </div>
-          ) : (
-            <div className="sdc-empty">Tap to log premium, policies &amp; households</div>
-          )}
-        </div>
-      )}
-
       {/* Two-column content */}
       <div className="tab-content">
 
@@ -281,8 +298,10 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
               );
             }
 
-            const done = todayTasks[task.id] || false;
+            const done = !!todayTasks[task.id];
             const clientName = personData.clients?.[selectedDate]?.[task.id];
+            const hasSaleDetails = done && task.isSale && personData.saleDetails?.[selectedDate]?.[task.id];
+
             return (
               <button
                 key={task.id}
@@ -296,6 +315,14 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
                   <span className="task-label">{task.label}</span>
                   {done && clientName && <span className="task-client">{clientName}</span>}
                 </div>
+                {hasSaleDetails && (
+                  <button
+                    className="task-edit-btn"
+                    onClick={e => { e.stopPropagation(); openSaleEdit(task); }}
+                  >
+                    Edit
+                  </button>
+                )}
                 <span className="task-pts">+{task.points}</span>
               </button>
             );
@@ -325,7 +352,7 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
         </div>
       </div>
 
-      {/* Verification Modal */}
+      {/* Client name verification modal */}
       {pendingTask && (
         <div className="verify-overlay" onClick={e => e.target === e.currentTarget && setPendingTask(null)}>
           <div className="verify-modal">
@@ -343,46 +370,53 @@ export default function PersonTab({ person, today, onRefresh, kpiData, refreshTi
             <div className="verify-actions">
               <button className="verify-cancel" onClick={() => setPendingTask(null)}>Cancel</button>
               <button className="verify-confirm" onClick={confirmVerification} disabled={!clientInput.trim()}>
-                Confirm +{pendingTask.points} pts
+                {pendingTask.isSale ? 'Next →' : `Confirm +${pendingTask.points} pts`}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Today's Sales Modal */}
-      {showSalesModal && (
-        <div className="verify-overlay" onClick={e => e.target === e.currentTarget && setShowSalesModal(false)}>
+      {/* Sale details modal */}
+      {saleModal && (
+        <div className="verify-overlay" onClick={e => e.target === e.currentTarget && setSaleModal(null)}>
           <div className="verify-modal">
-            <div className="verify-task-name">{fmtDate(selectedDate)}</div>
-            <div className="verify-title">{dateLabel}</div>
+            <div className="verify-task-name">
+              {saleModal.task.label}
+              {saleModal.mode === 'new' && ` · ${saleModal.clientName}`}
+            </div>
+            <div className="verify-title">
+              {saleModal.mode === 'new' ? `+${saleModal.task.points} pts — Sale Details` : 'Edit Sale Details'}
+            </div>
             <input
               className="verify-input"
               type="text"
               placeholder="Premium amount (e.g. $1,200)"
-              value={salePremium}
-              onChange={e => setSalePremium(e.target.value)}
+              value={premiumInput}
+              onChange={e => setPremiumInput(e.target.value)}
               autoFocus
             />
             <input
               className="verify-input"
               type="number"
               placeholder="Number of policies"
-              value={salePolicies}
-              onChange={e => setSalePolicies(e.target.value)}
-              min="0"
+              value={numPoliciesInput}
+              onChange={e => setNumPoliciesInput(e.target.value)}
+              min="1"
             />
             <input
               className="verify-input"
               type="number"
               placeholder="Number of households"
-              value={saleHouseholds}
-              onChange={e => setSaleHouseholds(e.target.value)}
-              min="0"
+              value={numHouseholdsInput}
+              onChange={e => setNumHouseholdsInput(e.target.value)}
+              min="1"
             />
             <div className="verify-actions">
-              <button className="verify-cancel" onClick={() => setShowSalesModal(false)}>Cancel</button>
-              <button className="verify-confirm" onClick={saveSalesDay}>Save</button>
+              <button className="verify-cancel" onClick={() => setSaleModal(null)}>Cancel</button>
+              <button className="verify-confirm" onClick={confirmSaleDetails}>
+                {saleModal.mode === 'new' ? 'Save Sale' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>

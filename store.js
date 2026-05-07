@@ -12,6 +12,7 @@ let state = {
   clients: {},
   log: [],
   salesDays: {},
+  saleDetails: {},
 };
 
 if (fs.existsSync(FILE)) {
@@ -93,6 +94,21 @@ module.exports = {
   },
   getChallenge(person, date) {
     return state.challenges[person]?.[date] || '';
+  },
+
+  // Sale details cache — quick access for Edit pre-fill (one per task per day)
+  setSaleDetails(person, taskId, date, details) {
+    if (!state.saleDetails[person]) state.saleDetails[person] = {};
+    if (!state.saleDetails[person][date]) state.saleDetails[person][date] = {};
+    if (details) {
+      state.saleDetails[person][date][taskId] = details;
+    } else {
+      delete state.saleDetails?.[person]?.[date]?.[taskId];
+    }
+    save();
+  },
+  getSaleDetails(person, date) {
+    return state.saleDetails?.[person]?.[date] || {};
   },
 
   // Daily sales records (one per producer per day)

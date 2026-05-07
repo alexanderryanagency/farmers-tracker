@@ -74,14 +74,14 @@ app.get('/api/week', (req, res) => {
     const wins = {};
     const challenges = {};
     const clients = {};
-    const salesDay = {};
+    const saleDetails = {};
 
     for (const date of weekDates) {
       tasks[date] = store.getTasks(person, date);
       wins[date] = store.getWin(person, date);
       challenges[date] = store.getChallenge(person, date);
       clients[date] = store.getClients(person, date);
-      salesDay[date] = store.getSalesDay(person, date);
+      saleDetails[date] = store.getSaleDetails(person, date);
     }
 
     data[person] = {
@@ -89,7 +89,7 @@ app.get('/api/week', (req, res) => {
       wins,
       challenges,
       clients,
-      salesDay,
+      saleDetails,
       points: calcWeeklyPoints(person, weekDates),
     };
   }
@@ -138,6 +138,17 @@ app.get('/api/kpi', (req, res) => {
   const workingDaysElapsed = workingDays(elapsedDates);
   const workingDaysTotal   = workingDays(fullDates);
 
+  // Build a deduped map of sale log entries: key = "person-date-taskId" → most recent entry
+  const allLog = store.getLog();
+  const saleMap = new Map();
+  for (const entry of allLog) {
+    if (entry.date < SALES_MONTH_START || entry.date > periodEnd) continue;
+    if (entry.taskId !== 'monoline' && entry.taskId !== 'bundle') continue;
+    const key = `${entry.person}-${entry.date}-${entry.taskId}`;
+    const existing = saleMap.get(key);
+    if (!existing || entry.timestamp > existing.timestamp) saleMap.set(key, entry);
+  }
+
   const result = {};
 
   for (const person of PERSONS) {
@@ -153,14 +164,17 @@ app.get('/api/kpi', (req, res) => {
       totalConversations += convs;
       if (convs > 0) activeDays++;
 
-      const sd = store.getSalesDay(person, date);
-      if (sd) {
-        if (sd.premium) {
-          const amt = parseFloat(String(sd.premium).replace(/[$,\s]/g, ''));
+      for (const taskId of ['monoline', 'bundle']) {
+        if (!tasks[taskId]) continue;
+        const entry = saleMap.get(`${person}-${date}-${taskId}`);
+        if (!entry) continue;
+        if (entry.premium) {
+          const amt = parseFloat(String(entry.premium).replace(/[$,\s]/g, ''));
           if (!isNaN(amt)) totalPremium += amt;
         }
-        totalPolicies   += Number(sd.policies)   || 0;
-        totalHouseholds += Number(sd.households) || 0;
+        totalPolicies   += Number(entry.numPolicies) || 0;
+        // Support both old boolean newHousehold and new numeric numHouseholds
+        totalHouseholds += Number(entry.numHouseholds) || (entry.newHousehold ? 1 : 0);
       }
     }
 
@@ -187,7 +201,7 @@ app.get('/api/kpi', (req, res) => {
 });
 
 app.post('/api/task', (req, res) => {
-  const { person, taskId, date, completed, clientName, premium, numPolicies, newHousehold } = req.body;
+  const { person, taskId, date, completed, clientName, premium, numPolicies, numHouseholds } = req.body;
   store.setTask(person, taskId, date, completed);
 
   if (completed && clientName) {
@@ -203,12 +217,25 @@ app.post('/api/task', (req, res) => {
       time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       timestamp: now.getTime(),
     };
-    if (premium != null) entry.premium = premium;
-    if (numPolicies != null) entry.numPolicies = numPolicies;
-    if (newHousehold != null) entry.newHousehold = newHousehold;
+    if (premium      != null) entry.premium      = premium;
+    if (numPolicies  != null) entry.numPolicies  = numPolicies;
+    if (numHouseholds != null) entry.numHouseholds = numHouseholds;
     store.addLogEntry(entry);
+
+    if (taskId === 'monoline' || taskId === 'bundle') {
+      store.setSaleDetails(person, taskId, date, { premium, numPolicies, numHouseholds });
+    }
   } else if (!completed) {
     store.setClientName(person, taskId, date, null);
+    if (taskId === 'monoline' || taskId === 'bundle') {
+      store.setSaleDetails(person, taskId, date, null);
+      // Remove the associated log entry so it doesn't persist in KPI
+      const log = store.getLog();
+      const match = log
+        .filter(e => e.person === person && e.date === date && e.taskId === taskId)
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+      if (match) store.deleteLogEntry(match.id);
+    }
   }
 
   io.emit('refresh');
@@ -258,6 +285,24 @@ app.post('/api/sale/decrement', (req, res) => {
   const current = Number(tasks[taskId]) || 0;
   store.setTask(person, taskId, date, Math.max(0, current - 1));
 
+  io.emit('refresh');
+  res.json({ success: true });
+});
+
+app.patch('/api/sale-details', (req, res) => {
+  const { person, taskId, date, premium, numPolicies, numHouseholds } = req.body;
+  const log = store.getLog();
+  const match = log
+    .filter(e => e.person === person && e.date === date && e.taskId === taskId)
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+  if (match) {
+    const updates = {};
+    if (premium      !== undefined) updates.premium      = premium;
+    if (numPolicies  !== undefined) updates.numPolicies  = numPolicies;
+    if (numHouseholds !== undefined) updates.numHouseholds = numHouseholds;
+    store.updateLogEntry(match.id, updates);
+  }
+  store.setSaleDetails(person, taskId, date, { premium, numPolicies, numHouseholds });
   io.emit('refresh');
   res.json({ success: true });
 });

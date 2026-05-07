@@ -467,6 +467,21 @@ html, body {
 }
 .task-item.done .task-pts { color: var(--gold); }
 
+.task-edit-btn {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--s2);
+  color: var(--t2);
+  font-size: 10px; font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.task-edit-btn:hover { border-color: var(--bh); color: #fff; background: var(--s3); }
+
 /* Habits grid */
 .habits-section { flex-shrink: 0; }
 .habits-grid-scroll { overflow-x: auto; scrollbar-width: none; }
