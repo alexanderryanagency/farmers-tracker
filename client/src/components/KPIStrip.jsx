@@ -3,7 +3,7 @@ function fmt$(n) {
   return `$${Math.round(n)}`;
 }
 
-export default function KPIStrip({ kpi, premiumGoal = 30000 }) {
+export default function KPIStrip({ kpi, premiumGoal = 30000, hero = false }) {
   if (!kpi) return null;
 
   const convGood  = kpi.avgConvPerDay >= 3;
@@ -11,8 +11,10 @@ export default function KPIStrip({ kpi, premiumGoal = 30000 }) {
   const polGood   = kpi.totalHouseholds > 0 && kpi.policiesPerHH >= 1.5;
   const premGood  = kpi.premiumPace >= premiumGoal;
 
+  const cls = `kpi-strip${hero ? ' kpi-strip--hero' : ''}`;
+
   return (
-    <div className="kpi-strip">
+    <div className={cls}>
       <div className="kpi-card">
         <span className="kpi-label">Conv / Day</span>
         <span className={`kpi-value ${convGood ? 'kpi-good' : 'kpi-bad'}`}>

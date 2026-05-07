@@ -157,7 +157,7 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
 
       {/* KPI strip — producers only */}
       {person.role === 'Producer' && (
-        <KPIStrip kpi={kpiData?.data?.[person.id]} />
+        <KPIStrip kpi={kpiData?.data?.[person.id]} hero />
       )}
 
       {/* Date strip */}
@@ -243,27 +243,25 @@ export default function PersonTab({ person, weekData, today, onRefresh, kpiData 
           })}
         </div>
 
-        {/* Right: Win + Challenge */}
+        {/* Right: Win + Challenge side by side */}
         <div className="col-right">
           <div className="daily-field win-field">
-            <div className="daily-label win-label">Win of the Day</div>
+            <div className="daily-label win-label">Win</div>
             <textarea
               className="daily-input"
-              placeholder="What was your biggest win today?"
+              placeholder="Biggest win today?"
               value={winValue}
               onChange={handleWinChange}
-              rows={4}
             />
           </div>
 
           <div className="daily-field challenge-field">
-            <div className="daily-label challenge-label">Challenge of the Day</div>
+            <div className="daily-label challenge-label">Challenge</div>
             <textarea
               className="daily-input"
-              placeholder="What are you struggling with today?"
+              placeholder="Struggling with?"
               value={challengeValue}
               onChange={handleChallengeChange}
-              rows={4}
             />
           </div>
         </div>

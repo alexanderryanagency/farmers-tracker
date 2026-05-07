@@ -203,6 +203,25 @@ app.get('/api/log', (req, res) => {
   res.json(store.getLog());
 });
 
+app.patch('/api/log/:id', (req, res) => {
+  const { clientName, premium, numPolicies } = req.body;
+  const updates = {};
+  if (clientName !== undefined) updates.clientName = clientName;
+  if (premium !== undefined) updates.premium = premium;
+  if (numPolicies !== undefined) updates.numPolicies = numPolicies;
+  const ok = store.updateLogEntry(req.params.id, updates);
+  if (!ok) return res.status(404).json({ error: 'Not found' });
+  io.emit('refresh');
+  res.json({ success: true });
+});
+
+app.delete('/api/log/:id', (req, res) => {
+  const ok = store.deleteLogEntry(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Not found' });
+  io.emit('refresh');
+  res.json({ success: true });
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });

@@ -387,14 +387,10 @@ html, body {
 
 .col-right {
   flex: 1;
-  overflow-y: auto;
-  padding: 10px 8px;
-  display: flex; flex-direction: column; gap: 10px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--s3) transparent;
+  overflow: hidden;
+  padding: 0;
+  display: flex; flex-direction: row; gap: 0;
 }
-.col-right::-webkit-scrollbar { width: 3px; }
-.col-right::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
 
 .col-label {
   font-size: 8px; font-weight: 800;
@@ -526,30 +522,34 @@ html, body {
 ════════════════════════════ */
 .daily-field {
   display: flex; flex-direction: column; gap: 6px;
-  flex: 1;
+  flex: 1; overflow: hidden;
+  padding: 10px 8px;
 }
+.win-field { border-right: 1px solid var(--border); }
+
 .daily-label {
   font-size: 9px; font-weight: 800;
   text-transform: uppercase; letter-spacing: 1.8px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .win-label      { color: #4ade80; border-bottom-color: rgba(74,222,128,0.25); }
 .challenge-label { color: #fb923c; border-bottom-color: rgba(251,146,60,0.25); }
 
 .daily-input {
   flex: 1;
-  padding: 10px 11px;
+  padding: 8px 9px;
   background: var(--s2); border: 1px solid var(--border);
   border-radius: 8px;
-  font-family: inherit; font-size: 12px; line-height: 1.55;
-  color: #ffffff; resize: none; min-height: 70px;
+  font-family: inherit; font-size: 11px; line-height: 1.55;
+  color: #ffffff; resize: none; min-height: 50px;
   transition: border-color 0.15s;
 }
 .daily-input:focus { outline: none; }
 .win-field      .daily-input:focus { border-color: rgba(74,222,128,0.35); }
 .challenge-field .daily-input:focus { border-color: rgba(251,146,60,0.35); }
-.daily-input::placeholder { color: var(--t3); }
+.daily-input::placeholder { color: var(--t3); font-size: 10px; }
 
 /* ════════════════════════════
    KPI STRIP
@@ -603,6 +603,32 @@ html, body {
   white-space: nowrap;
 }
 
+/* Hero KPI strip (producer tabs) */
+.kpi-strip--hero {
+  padding: 10px 10px;
+  gap: 8px;
+}
+.kpi-strip--hero .kpi-card {
+  padding: 14px 4px 12px;
+  border-radius: 10px;
+}
+.kpi-strip--hero .kpi-label {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+  color: var(--t2);
+}
+.kpi-strip--hero .kpi-value {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+.kpi-strip--hero .kpi-goal {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--t3);
+}
+
 /* Team KPI section (scoreboard) */
 .team-kpi-section {
   background: var(--s1);
@@ -632,6 +658,17 @@ html, body {
   border-bottom: none;
   background: transparent;
   padding: 0 8px 8px;
+}
+.team-kpi-section .kpi-card {
+  padding: 10px 4px 9px;
+}
+.team-kpi-section .kpi-value {
+  font-size: 22px;
+  letter-spacing: -0.8px;
+}
+.team-kpi-section .kpi-label {
+  font-size: 8px;
+  color: var(--t2);
 }
 
 /* Sale details toggle */
@@ -832,6 +869,44 @@ html, body {
 .log-policies { color: var(--t2); text-align: center; }
 .log-date     { color: var(--t2); white-space: nowrap; }
 .log-time     { color: var(--t3); white-space: nowrap; }
+
+/* Log edit / delete actions */
+.log-actions { white-space: nowrap; padding: 8px 6px; }
+.log-action-btns { display: flex; gap: 4px; }
+
+.log-edit-btn, .log-del-btn {
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 10px; font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  transition: all 0.15s;
+}
+.log-edit-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--t2);
+}
+.log-edit-btn:hover { border-color: var(--bh); color: #fff; }
+.log-del-btn {
+  background: transparent;
+  border: 1px solid rgba(204,0,0,0.25);
+  color: rgba(204,0,0,0.55);
+}
+.log-del-btn:hover { border-color: var(--red); color: var(--red); }
+
+.log-delete-confirm { display: flex; align-items: center; gap: 4px; }
+.log-sure { font-size: 10px; color: var(--t2); font-weight: 700; }
+.log-action-yes {
+  padding: 4px 8px; border-radius: 5px;
+  background: var(--red); border: none;
+  color: #fff; font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.log-action-no {
+  padding: 4px 8px; border-radius: 5px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--t2); font-size: 10px; font-weight: 700; cursor: pointer;
+}
 
 .log-empty {
   flex: 1;

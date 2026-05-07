@@ -59,6 +59,20 @@ module.exports = {
   getLog() {
     return state.log;
   },
+  updateLogEntry(id, updates) {
+    const entry = state.log.find(e => String(e.id) === String(id));
+    if (!entry) return false;
+    Object.assign(entry, updates);
+    save();
+    return true;
+  },
+  deleteLogEntry(id) {
+    const idx = state.log.findIndex(e => String(e.id) === String(id));
+    if (idx === -1) return false;
+    state.log.splice(idx, 1);
+    save();
+    return true;
+  },
 
   // Win of the day
   setWin(person, date, content) {
