@@ -16,16 +16,24 @@ const clientDist = path.join(__dirname, 'client', 'dist');
 app.use(express.static(clientDist));
 
 const TASK_POINTS = {
-  conv_3: 5, conv_4: 10, ghost_5: 3, ghost_10: 5,
+  ghost_5: 3, ghost_10: 5,
   referral: 10, monoline: 3, bundle: 5, life_app: 5, life_sale: 20,
 };
 
 const TASK_LABELS = {
-  conv_3: '3 Conversations', conv_4: '4 Conversations',
+  new_conv: 'New Conversations',
   ghost_5: '5 Ghost Quotes', ghost_10: '10 Ghost Quotes',
   referral: 'Referral Received', monoline: 'Monoline Sale',
   bundle: 'Bundle Sale', life_app: 'Life App Sent', life_sale: 'Life Sale',
 };
+
+function getNewConvPoints(count) {
+  const n = Number(count) || 0;
+  if (n >= 5) return 15;
+  if (n >= 4) return 10;
+  if (n >= 3) return 5;
+  return 0;
+}
 
 const PERSON_NAMES = { jayce: 'Jayce', alissa: 'Alissa', dan: 'Dan' };
 const PERSONS = ['jayce', 'alissa', 'dan'];
@@ -47,6 +55,7 @@ function calcWeeklyPoints(person, weekDates) {
   return weekDates.reduce((total, date) => {
     const tasks = store.getTasks(person, date);
     return total + Object.entries(tasks).reduce((sum, [id, done]) => {
+      if (id === 'new_conv') return sum + getNewConvPoints(done);
       return sum + (done ? (TASK_POINTS[id] || 0) : 0);
     }, 0);
   }, 0);
@@ -84,13 +93,13 @@ app.get('/api/week', (req, res) => {
 });
 
 app.post('/api/task', (req, res) => {
-  const { person, taskId, date, completed, clientName } = req.body;
+  const { person, taskId, date, completed, clientName, premium, numPolicies } = req.body;
   store.setTask(person, taskId, date, completed);
 
   if (completed && clientName) {
     store.setClientName(person, taskId, date, clientName);
     const now = new Date();
-    store.addLogEntry({
+    const entry = {
       person,
       personName: PERSON_NAMES[person] || person,
       taskId,
@@ -99,7 +108,10 @@ app.post('/api/task', (req, res) => {
       date,
       time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       timestamp: now.getTime(),
-    });
+    };
+    if (premium != null) entry.premium = premium;
+    if (numPolicies != null) entry.numPolicies = numPolicies;
+    store.addLogEntry(entry);
   } else if (!completed) {
     store.setClientName(person, taskId, date, null);
   }

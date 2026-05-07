@@ -52,6 +52,8 @@ export default function LogTab() {
                 <th>Person</th>
                 <th>Task</th>
                 <th>Client</th>
+                <th>Premium</th>
+                <th># Policies</th>
                 <th>Date</th>
                 <th>Time</th>
               </tr>
@@ -69,6 +71,8 @@ export default function LogTab() {
                     </td>
                     <td><span className="log-task-badge">{entry.taskLabel}</span></td>
                     <td className="log-client">{entry.clientName}</td>
+                    <td className="log-premium">{entry.premium ?? '—'}</td>
+                    <td className="log-policies">{entry.numPolicies != null ? entry.numPolicies : '—'}</td>
                     <td className="log-date">{formatDate(entry.date)}</td>
                     <td className="log-time">{entry.time}</td>
                   </tr>
