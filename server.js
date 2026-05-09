@@ -3,6 +3,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
 const app = express();
@@ -18,6 +19,10 @@ app.use(express.static(clientDist));
 const TASK_POINTS = {
   ghost_5: 3, ghost_10: 5,
   referral: 10, monoline: 3, bundle: 5, life_app: 5, life_sale: 20,
+  // Dan's tasks
+  followup_5: 5, followup_10: 10,
+  processed_5: 3, processed_10: 5,
+  customer_review: 5, cancellation_saved: 10, referral_collected: 10,
 };
 
 const TASK_LABELS = {
@@ -25,6 +30,11 @@ const TASK_LABELS = {
   ghost_5: '5 Ghost Quotes', ghost_10: '10 Ghost Quotes',
   referral: 'Referral Received', monoline: 'Monoline Sale',
   bundle: 'Bundle Sale', life_app: 'Life App Sent', life_sale: 'Life Sale',
+  followup_5: 'Follow-Up Calls (5)', followup_10: 'Follow-Up Calls (10)',
+  processed_5: 'Policies Processed (5)', processed_10: 'Policies Processed (10)',
+  customer_review: 'Customer Review Requested',
+  cancellation_saved: 'Cancellation Saved',
+  referral_collected: 'Referral Collected',
 };
 
 function getNewConvPoints(count) {
@@ -138,7 +148,6 @@ app.get('/api/kpi', (req, res) => {
   const workingDaysElapsed = workingDays(elapsedDates);
   const workingDaysTotal   = workingDays(fullDates);
 
-  // Build a deduped map of sale log entries: key = "person-date-taskId" → most recent entry
   const allLog = store.getLog();
   const saleMap = new Map();
   for (const entry of allLog) {
@@ -173,7 +182,6 @@ app.get('/api/kpi', (req, res) => {
           if (!isNaN(amt)) totalPremium += amt;
         }
         totalPolicies   += Number(entry.numPolicies) || 0;
-        // Support both old boolean newHousehold and new numeric numHouseholds
         totalHouseholds += Number(entry.numHouseholds) || (entry.newHousehold ? 1 : 0);
       }
     }
@@ -229,7 +237,6 @@ app.post('/api/task', (req, res) => {
     store.setClientName(person, taskId, date, null);
     if (taskId === 'monoline' || taskId === 'bundle') {
       store.setSaleDetails(person, taskId, date, null);
-      // Remove the associated log entry so it doesn't persist in KPI
       const log = store.getLog();
       const match = log
         .filter(e => e.person === person && e.date === date && e.taskId === taskId)
@@ -343,6 +350,73 @@ app.delete('/api/log/:id', (req, res) => {
   if (!ok) return res.status(404).json({ error: 'Not found' });
   io.emit('refresh');
   res.json({ success: true });
+});
+
+// Coaching notes
+app.get('/api/coaching', (req, res) => {
+  res.json(store.getCoachingNotes());
+});
+
+app.post('/api/coaching', (req, res) => {
+  const { producer, date, notes } = req.body;
+  if (!notes || !notes.trim()) return res.status(400).json({ error: 'Notes required' });
+  store.addCoachingNote({ producer, date, notes: notes.trim(), createdAt: new Date().toISOString() });
+  res.json({ success: true });
+});
+
+app.delete('/api/coaching/:id', (req, res) => {
+  const ok = store.deleteCoachingNote(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Not found' });
+  res.json({ success: true });
+});
+
+// Claude AI generate endpoint
+app.post('/api/generate', async (req, res) => {
+  const { producer, clientName, callType, product, premium, notes, tone } = req.body;
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const userPrompt = `Generate professional insurance follow-up content for The Alexander Ryan-Bailey Agency.
+
+Producer: ${producer || 'Agency'}
+Client First Name: ${clientName || 'there'}
+Call Type: ${callType || 'New Quote'}
+Product Discussed: ${product || 'Auto + Home Bundle'}
+Quote Premium: ${premium ? '$' + premium + '/year' : 'not specified'}
+Tone: ${tone || 'Warm & Friendly'}
+Key Notes from Call: ${notes || 'Standard follow-up'}
+
+Return ONLY a valid JSON object with exactly these keys (no markdown, no code blocks):
+{
+  "az_notes": "Formatted AgencyZoom call notes ready to paste. Include call type, product, premium, key discussion points, and next steps. Professional format with bullet points using dashes.",
+  "email": {
+    "subject": "Short compelling subject line for the follow-up email",
+    "body": "Full professional email body starting with greeting. Include personalized details from the call, value proposition, clear next steps, and professional sign-off from ${producer || 'your agent'} at The Alexander Ryan-Bailey Agency."
+  },
+  "text_message": "Friendly SMS follow-up under 160 characters referencing the call and next step."
+}`;
+
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1500,
+      system: 'You are an AI assistant for The Alexander Ryan-Bailey Agency, a Farmers Insurance agency. Generate professional, warm, and personalized insurance follow-up content. Agency tagline: Protection. Growth. Legacy. Always return valid JSON only with no markdown formatting or code blocks.',
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const text = message.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+    const data = JSON.parse(jsonMatch[0]);
+    res.json(data);
+  } catch (err) {
+    console.error('Generate error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate content' });
+  }
 });
 
 app.get('*', (req, res) => {

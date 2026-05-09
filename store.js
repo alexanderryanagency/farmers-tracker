@@ -13,12 +13,14 @@ let state = {
   log: [],
   salesDays: {},
   saleDetails: {},
+  coachingNotes: [],
 };
 
 if (fs.existsSync(FILE)) {
   try {
     const loaded = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     state = { ...state, ...loaded };
+    if (!state.coachingNotes) state.coachingNotes = [];
   } catch {}
 }
 
@@ -27,7 +29,6 @@ function save() {
 }
 
 module.exports = {
-  // Tasks
   setTask(person, taskId, date, completed) {
     if (!state.tasks[person]) state.tasks[person] = {};
     if (!state.tasks[person][date]) state.tasks[person][date] = {};
@@ -38,7 +39,6 @@ module.exports = {
     return state.tasks[person]?.[date] || {};
   },
 
-  // Client names for verified tasks
   setClientName(person, taskId, date, clientName) {
     if (!state.clients[person]) state.clients[person] = {};
     if (!state.clients[person][date]) state.clients[person][date] = {};
@@ -53,7 +53,6 @@ module.exports = {
     return state.clients[person]?.[date] || {};
   },
 
-  // Verified task log
   addLogEntry(entry) {
     state.log.unshift({ ...entry, id: Date.now() + Math.random() });
     save();
@@ -76,7 +75,6 @@ module.exports = {
     return true;
   },
 
-  // Win of the day
   setWin(person, date, content) {
     if (!state.wins[person]) state.wins[person] = {};
     state.wins[person][date] = content;
@@ -86,7 +84,6 @@ module.exports = {
     return state.wins[person]?.[date] || '';
   },
 
-  // Challenge of the day
   setChallenge(person, date, content) {
     if (!state.challenges[person]) state.challenges[person] = {};
     state.challenges[person][date] = content;
@@ -96,7 +93,6 @@ module.exports = {
     return state.challenges[person]?.[date] || '';
   },
 
-  // Sale details cache — quick access for Edit pre-fill (one per task per day)
   setSaleDetails(person, taskId, date, details) {
     if (!state.saleDetails[person]) state.saleDetails[person] = {};
     if (!state.saleDetails[person][date]) state.saleDetails[person][date] = {};
@@ -111,7 +107,6 @@ module.exports = {
     return state.saleDetails?.[person]?.[date] || {};
   },
 
-  // Daily sales records (one per producer per day)
   setSalesDay(person, date, data) {
     if (!state.salesDays[person]) state.salesDays[person] = {};
     state.salesDays[person][date] = data;
@@ -121,7 +116,23 @@ module.exports = {
     return state.salesDays?.[person]?.[date] || null;
   },
 
-  // Legacy habits/notes (kept for data compat, unused in UI)
+  addCoachingNote(note) {
+    if (!state.coachingNotes) state.coachingNotes = [];
+    state.coachingNotes.unshift({ ...note, id: Date.now() + Math.random() });
+    save();
+  },
+  getCoachingNotes() {
+    return state.coachingNotes || [];
+  },
+  deleteCoachingNote(id) {
+    if (!state.coachingNotes) return false;
+    const idx = state.coachingNotes.findIndex(n => String(n.id) === String(id));
+    if (idx === -1) return false;
+    state.coachingNotes.splice(idx, 1);
+    save();
+    return true;
+  },
+
   setHabit() {},
   getHabits() { return {}; },
   setNotes() {},

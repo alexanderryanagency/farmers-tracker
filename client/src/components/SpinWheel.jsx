@@ -1,16 +1,24 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 
 const PRIZES = [
-  { id: 'gift_card', label: '$25 Gift Card',          lines: ['$25', 'Gift Card'], emoji: '🏆', weight: 1,   color: '#16A34A' },
-  { id: 'half_day',  label: 'Half Day Off',            lines: ['Half', 'Day Off'],  emoji: '🎟️', weight: 1,   color: '#2563EB' },
-  { id: 'lunch',     label: 'Team Lunch',              lines: ['Team', 'Lunch'],    emoji: '🍕', weight: 1,   color: '#EA580C' },
-  { id: 'cash_50',   label: '$50 Cash',                lines: ['$50', 'Cash'],      emoji: '💵', weight: 1,   color: '#9333EA' },
-  { id: 'cash_100',  label: '$100 Cash',               lines: ['$100', 'Cash'],     emoji: '🎉', weight: 0.5, color: '#B45309' },
-  { id: 'swag',      label: 'Agency Swag',             lines: ['Agency', 'Swag'],   emoji: '🧢', weight: 1,   color: '#BE185D' },
-  { id: 'trophy',    label: 'Top Performer Trophy',    lines: ['Top', 'Trophy'],    emoji: '🎯', weight: 1,   color: '#CC0000' },
+  { id: 'gift_card', label: '$25 Gift Card',       lines: ['$25', 'Gift Card'],   emoji: '🏆', weight: 1,   color: '#16A34A' },
+  { id: 'half_day',  label: 'Half Day Off',         lines: ['Half', 'Day Off'],    emoji: '🎟️', weight: 1,   color: '#2563EB' },
+  { id: 'lunch',     label: 'Team Lunch',           lines: ['Team', 'Lunch'],      emoji: '🍕', weight: 1,   color: '#EA580C' },
+  { id: 'cash_50',   label: '$50 Cash',             lines: ['$50', 'Cash'],        emoji: '💵', weight: 1,   color: '#9333EA' },
+  { id: 'cash_100',  label: '$100 Cash',            lines: ['$100', 'Cash'],       emoji: '🎉', weight: 0.5, color: '#B45309' },
+  { id: 'swag',      label: 'Agency Swag',          lines: ['Agency', 'Swag'],     emoji: '🧢', weight: 1,   color: '#BE185D' },
+  { id: 'trophy',    label: 'Top Performer Trophy', lines: ['Top', 'Trophy'],      emoji: '🎯', weight: 1,   color: '#CC0000' },
 ];
 
 const TOTAL_WEIGHT = PRIZES.reduce((s, p) => s + p.weight, 0);
+
+function lighten(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (n >> 16) + amt);
+  const g = Math.min(255, ((n >> 8) & 0xff) + amt);
+  const b = Math.min(255, (n & 0xff) + amt);
+  return `rgb(${r},${g},${b})`;
+}
 
 export default function SpinWheel({ onClose }) {
   const canvasRef = useRef(null);
@@ -23,13 +31,7 @@ export default function SpinWheel({ onClose }) {
     let cumul = -Math.PI / 2;
     return PRIZES.map(prize => {
       const angle = (prize.weight / TOTAL_WEIGHT) * Math.PI * 2;
-      const slice = {
-        prize,
-        startAngle: cumul,
-        endAngle: cumul + angle,
-        midAngle: cumul + angle / 2,
-        angleDeg: (angle * 180) / Math.PI,
-      };
+      const slice = { prize, startAngle: cumul, endAngle: cumul + angle, midAngle: cumul + angle / 2, angleDeg: (angle * 180) / Math.PI };
       cumul += angle;
       return slice;
     });
@@ -40,10 +42,9 @@ export default function SpinWheel({ onClose }) {
     if (!canvas) return;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-    const radius = Math.min(cx, cy) - 22;
+    const radius = Math.min(cx, cy) - 20;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     const slices = getSlices();
 
     ctx.save();
@@ -51,9 +52,8 @@ export default function SpinWheel({ onClose }) {
     ctx.rotate(rotation);
 
     for (const slice of slices) {
-      // Slice fill with subtle inner gradient
       const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-      grad.addColorStop(0, lighten(slice.prize.color, 30));
+      grad.addColorStop(0, lighten(slice.prize.color, 25));
       grad.addColorStop(1, slice.prize.color);
 
       ctx.beginPath();
@@ -62,11 +62,10 @@ export default function SpinWheel({ onClose }) {
       ctx.closePath();
       ctx.fillStyle = grad;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Text
       const mid = slice.midAngle;
       const textR = radius * 0.63;
       const baseFont = Math.floor(radius * 0.085);
@@ -77,10 +76,9 @@ export default function SpinWheel({ onClose }) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 5;
+      ctx.shadowBlur = 4;
 
       if (smallSlice) {
-        // Tiny slice: just show the key value
         ctx.font = `800 ${Math.floor(baseFont * 0.9)}px Inter, sans-serif`;
         ctx.fillStyle = '#ffffff';
         ctx.fillText('$100', textR, -baseFont * 0.4);
@@ -88,10 +86,8 @@ export default function SpinWheel({ onClose }) {
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.fillText('Cash', textR, baseFont * 0.55);
       } else {
-        // Normal slice: emoji + two text lines
-        ctx.font = `${Math.floor(radius * 0.12)}px serif`;
+        ctx.font = `${Math.floor(radius * 0.115)}px serif`;
         ctx.fillText(slice.prize.emoji, textR, -baseFont * 1.3);
-
         ctx.font = `700 ${baseFont}px Inter, sans-serif`;
         ctx.fillStyle = '#ffffff';
         slice.prize.lines.forEach((line, i) => {
@@ -100,7 +96,6 @@ export default function SpinWheel({ onClose }) {
           ctx.fillText(line, textR, y);
         });
       }
-
       ctx.restore();
     }
 
@@ -111,16 +106,16 @@ export default function SpinWheel({ onClose }) {
     ctx.translate(cx, cy);
     ctx.beginPath();
     ctx.arc(0, 0, radius + 4, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(255,184,0,0.3)';
+    ctx.lineWidth = 3;
     ctx.stroke();
 
     // Center hub
     ctx.beginPath();
-    ctx.arc(0, 0, 15, 0, Math.PI * 2);
-    ctx.fillStyle = '#111111';
+    ctx.arc(0, 0, 14, 0, Math.PI * 2);
+    ctx.fillStyle = '#0F1729';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.strokeStyle = 'rgba(255,184,0,0.4)';
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
@@ -129,13 +124,13 @@ export default function SpinWheel({ onClose }) {
     ctx.save();
     ctx.translate(cx, cy - radius - 1);
     ctx.beginPath();
-    ctx.moveTo(0, -13);
-    ctx.lineTo(-10, 15);
-    ctx.lineTo(10, 15);
+    ctx.moveTo(0, -14);
+    ctx.lineTo(-10, 14);
+    ctx.lineTo(10, 14);
     ctx.closePath();
     ctx.fillStyle = '#FFB800';
-    ctx.shadowColor = 'rgba(255,184,0,0.6)';
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = 'rgba(255,184,0,0.7)';
+    ctx.shadowBlur = 14;
     ctx.fill();
     ctx.restore();
   }, [getSlices]);
@@ -143,7 +138,7 @@ export default function SpinWheel({ onClose }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const size = Math.min(window.innerWidth - 48, 360);
+    const size = Math.min(window.innerWidth - 80, 340);
     canvas.width = size;
     canvas.height = size;
     drawWheel(canvas.getContext('2d'), rotationRef.current);
@@ -154,7 +149,6 @@ export default function SpinWheel({ onClose }) {
     setSpinning(true);
     setWinner(null);
 
-    // Weighted random prize selection
     let rand = Math.random() * TOTAL_WEIGHT;
     let selectedPrize = PRIZES[PRIZES.length - 1];
     for (const prize of PRIZES) {
@@ -165,7 +159,6 @@ export default function SpinWheel({ onClose }) {
     const slices = getSlices();
     const winnerSlice = slices.find(s => s.prize.id === selectedPrize.id);
     const targetMid = winnerSlice.midAngle;
-
     const currentRot = rotationRef.current;
     const base = -Math.PI / 2 - targetMid;
     const normalized = ((base % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -210,32 +203,23 @@ export default function SpinWheel({ onClose }) {
         </div>
 
         {winner && (
-          <div className="winner-banner" style={{ borderColor: `${winner.color}55`, background: `linear-gradient(120deg, ${winner.color}22, #1a1a1a)` }}>
-            <span className="winner-prize-emoji">{winner.emoji}</span>
+          <div className="winner-banner">
+            <span className="winner-emoji">{winner.emoji}</span>
             <div className="winner-text">
-              <span className="winner-name">{winner.label}</span>
-              <span className="winner-pts">You won this week's prize!</span>
+              <div className="winner-name">{winner.label}</div>
+              <div className="winner-sub">You won this week's prize! 🎉</div>
             </div>
           </div>
         )}
 
         <button
-          className={`spin-go-btn ${spinning ? 'spinning' : ''}`}
+          className={`wheel-spin-btn${spinning ? ' spinning' : ''}`}
           onClick={spin}
           disabled={spinning}
         >
-          {spinning ? 'Spinning...' : 'Spin'}
+          {spinning ? 'Spinning...' : 'Spin the Wheel'}
         </button>
       </div>
     </div>
   );
-}
-
-// Lighten a hex color by amt (0-255)
-function lighten(hex, amt) {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.min(255, (n >> 16) + amt);
-  const g = Math.min(255, ((n >> 8) & 0xff) + amt);
-  const b = Math.min(255, (n & 0xff) + amt);
-  return `rgb(${r},${g},${b})`;
 }
