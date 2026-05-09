@@ -23,6 +23,21 @@ export default function App() {
   const [kpiData,  setKpiData]    = useState(null);
   const [loading,  setLoading]    = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.classList.add('transitioning');
+    setTimeout(() => document.documentElement.classList.remove('transitioning'), 350);
+    setTheme(next);
+  }
+
   const today = new Date().toISOString().split('T')[0];
 
   const fetchData = useCallback(async () => {
@@ -59,14 +74,21 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar activeTab={activeTab} onNavigate={setActiveTab} people={PEOPLE} weekData={weekData} />
+      <Sidebar
+        activeTab={activeTab}
+        onNavigate={setActiveTab}
+        people={PEOPLE}
+        weekData={weekData}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
       <main className="main-content">
-        {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={PEOPLE} />}
+        {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={PEOPLE} theme={theme} />}
         {activeTab === 'send'     && <SendSuite people={PEOPLE} />}
-        {activeTab === 'activity' && <ActivityTracker people={PEOPLE} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} />}
-        {activeTab === 'stats'    && <MyStats kpiData={kpiData} />}
+        {activeTab === 'activity' && <ActivityTracker people={PEOPLE} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
+        {activeTab === 'stats'    && <MyStats kpiData={kpiData} people={PEOPLE} />}
         {activeTab === 'coach'    && <CoachsCorner people={PEOPLE} />}
-        {activeTab === 'trophy'   && <TrophyCase weekData={weekData} people={PEOPLE} />}
+        {activeTab === 'trophy'   && <TrophyCase weekData={weekData} kpiData={kpiData} people={PEOPLE} />}
       </main>
     </div>
   );

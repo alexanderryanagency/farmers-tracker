@@ -1,15 +1,15 @@
-import { LayoutDashboard, Zap, CheckSquare, BarChart2, MessageSquare, Trophy } from 'lucide-react';
+import { LayoutDashboard, Zap, CheckSquare, BarChart2, MessageSquare, Trophy, Sun, Moon } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'command',  label: 'Command Center',   Icon: LayoutDashboard },
-  { id: 'send',     label: 'Send Suite',        Icon: Zap             },
-  { id: 'activity', label: 'Activity Tracker',  Icon: CheckSquare     },
-  { id: 'stats',    label: 'My Stats',          Icon: BarChart2       },
-  { id: 'coach',    label: "Coach's Corner",    Icon: MessageSquare   },
-  { id: 'trophy',   label: 'Trophy Case',       Icon: Trophy          },
+  { id: 'command',  label: 'Command Center',  Icon: LayoutDashboard },
+  { id: 'send',     label: 'Send Suite',       Icon: Zap             },
+  { id: 'activity', label: 'Activity Tracker', Icon: CheckSquare     },
+  { id: 'stats',    label: 'My Stats',         Icon: BarChart2       },
+  { id: 'coach',    label: "Coach's Corner",   Icon: MessageSquare   },
+  { id: 'trophy',   label: 'Trophy Case',      Icon: Trophy          },
 ];
 
-export default function Sidebar({ activeTab, onNavigate, people, weekData }) {
+export default function Sidebar({ activeTab, onNavigate, people, weekData, theme, onToggleTheme }) {
   const ranked = weekData
     ? [...people]
         .map(p => ({ ...p, points: weekData.data[p.id]?.points || 0 }))
@@ -53,6 +53,13 @@ export default function Sidebar({ activeTab, onNavigate, people, weekData }) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="sidebar-theme-row">
+        <span className="sidebar-theme-label">{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+        <button className="theme-toggle-btn" onClick={onToggleTheme} title="Toggle theme">
+          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
       </div>
     </aside>
   );

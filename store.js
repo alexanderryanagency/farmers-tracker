@@ -124,6 +124,14 @@ module.exports = {
   getCoachingNotes() {
     return state.coachingNotes || [];
   },
+  updateCoachingNote(id, updates) {
+    if (!state.coachingNotes) return false;
+    const note = state.coachingNotes.find(n => String(n.id) === String(id));
+    if (!note) return false;
+    Object.assign(note, updates);
+    save();
+    return true;
+  },
   deleteCoachingNote(id) {
     if (!state.coachingNotes) return false;
     const idx = state.coachingNotes.findIndex(n => String(n.id) === String(id));

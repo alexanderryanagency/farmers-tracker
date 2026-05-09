@@ -364,10 +364,35 @@ app.post('/api/coaching', (req, res) => {
   res.json({ success: true });
 });
 
+app.patch('/api/coaching/:id', (req, res) => {
+  const { notes } = req.body;
+  const updates = {};
+  if (notes !== undefined) updates.notes = notes;
+  const ok = store.updateCoachingNote(req.params.id, updates);
+  if (!ok) return res.status(404).json({ error: 'Not found' });
+  res.json({ success: true });
+});
+
 app.delete('/api/coaching/:id', (req, res) => {
   const ok = store.deleteCoachingNote(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Not found' });
   res.json({ success: true });
+});
+
+// Folio task data — for badge calculations
+app.get('/api/folio-tasks', (req, res) => {
+  const result = {};
+  const dates = dateRange(SALES_MONTH_START, SALES_MONTH_END);
+  for (const person of PERSONS) {
+    result[person] = {};
+    for (const date of dates) {
+      const tasks = store.getTasks(person, date);
+      if (Object.keys(tasks).length > 0) {
+        result[person][date] = tasks;
+      }
+    }
+  }
+  res.json(result);
 });
 
 // Claude AI generate endpoint

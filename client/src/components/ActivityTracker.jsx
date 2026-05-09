@@ -25,6 +25,7 @@ const DAN_TASKS = [
 ];
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const MEDALS = ['🥇', '🥈', '🥉'];
 
 function getNewConvPoints(count) {
   const n = Number(count) || 0;
@@ -186,7 +187,6 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
     challengeTimer.current = setTimeout(() => save('/api/daily', { person: person.id, date: selectedDate, challenge: val }), 600);
   }
 
-  // KPI values for producer strip
   const convGood  = (kpi?.avgConvPerDay ?? 0) >= 3;
   const closeGood = (kpi?.closeRate ?? 0) >= 25;
   const polGood   = kpi?.totalHouseholds > 0 && (kpi?.policiesPerHH ?? 0) >= 1.5;
@@ -194,14 +194,12 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
 
   return (
     <div className="activity-body">
-      {/* Week points badge */}
       <div className="week-pts-badge">
         <span>{person.name} — Week total:</span>
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>{personData.points} pts</span>
-        <span style={{ color: '#8B9BC1', fontWeight: 400, fontSize: 11 }}>/ 50 goal</span>
+        <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 11 }}>/ 50 goal</span>
       </div>
 
-      {/* Week nav + day strip */}
       <div className="week-bar">
         <button className="week-nav-btn left" onClick={() => navigateWeek(-1)}>
           <ChevronLeft size={18} />
@@ -226,7 +224,6 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
         </button>
       </div>
 
-      {/* KPI strip — producers only */}
       {!isDan && kpi && (
         <div className="producer-kpi-strip">
           <div className="pkpi-card">
@@ -256,7 +253,6 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
         </div>
       )}
 
-      {/* Tasks + Daily fields */}
       <div className="activity-content">
         <div className="tasks-col">
           <div className="tasks-col-header">
@@ -334,7 +330,6 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
         </div>
       </div>
 
-      {/* Client verification modal */}
       {pendingTask && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && setPendingTask(null)}>
           <div className="modal">
@@ -359,7 +354,6 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
         </div>
       )}
 
-      {/* Sale details modal */}
       {saleModal && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && setSaleModal(null)}>
           <div className="modal">
@@ -388,22 +382,31 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
   );
 }
 
-export default function ActivityTracker({ people, today, onRefresh, kpiData, refreshTick }) {
-  const [activePerson, setActivePerson] = useState(people[0].id);
-  const person = people.find(p => p.id === activePerson);
+export default function ActivityTracker({ people, today, onRefresh, kpiData, refreshTick, weekData }) {
+  const ranked = weekData
+    ? [...people]
+        .map(p => ({ ...p, points: weekData.data[p.id]?.points || 0 }))
+        .sort((a, b) => b.points - a.points)
+    : people;
+
+  const [activePerson, setActivePerson] = useState(ranked[0]?.id || people[0].id);
+  const person = people.find(p => p.id === activePerson) || people[0];
 
   return (
     <div className="activity-page">
-      {/* Producer tabs */}
       <div className="activity-producer-tabs">
-        {people.map(p => (
+        {ranked.map((p, i) => (
           <button
             key={p.id}
             className={`producer-tab-btn${activePerson === p.id ? ' active' : ''}`}
             onClick={() => setActivePerson(p.id)}
           >
             <img src={p.photo} alt={p.name} />
+            <span className="producer-tab-medal">{MEDALS[i]}</span>
             {p.name}
+            {weekData && (
+              <span className="tab-pts-badge">{p.points} pts</span>
+            )}
           </button>
         ))}
       </div>
