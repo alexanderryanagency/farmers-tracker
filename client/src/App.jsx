@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { LayoutDashboard, Zap, CheckSquare, BarChart2, MessageSquare, Trophy } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import CommandCenter from './components/CommandCenter';
 import SendSuite from './components/SendSuite';
@@ -8,6 +9,32 @@ import MyStats from './components/MyStats';
 import CoachsCorner from './components/CoachsCorner';
 import TrophyCase from './components/TrophyCase';
 import './App.css';
+
+const MOBILE_NAV = [
+  { id: 'command',  label: 'Home',     Icon: LayoutDashboard },
+  { id: 'send',     label: 'Send',     Icon: Zap             },
+  { id: 'activity', label: 'Activity', Icon: CheckSquare     },
+  { id: 'stats',    label: 'Stats',    Icon: BarChart2       },
+  { id: 'coach',    label: 'Coach',    Icon: MessageSquare   },
+  { id: 'trophy',   label: 'Trophy',   Icon: Trophy          },
+];
+
+function MobileNav({ activeTab, onNavigate }) {
+  return (
+    <nav className="mobile-bottom-nav">
+      {MOBILE_NAV.map(({ id, label, Icon }) => (
+        <button
+          key={id}
+          className={`mobile-nav-btn${activeTab === id ? ' active' : ''}`}
+          onClick={() => onNavigate(id)}
+        >
+          <Icon size={22} />
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 const socket = io();
 
@@ -88,6 +115,7 @@ export default function App() {
         {activeTab === 'coach'    && <CoachsCorner people={PEOPLE} />}
         {activeTab === 'trophy'   && <TrophyCase weekData={weekData} kpiData={kpiData} people={PEOPLE} />}
       </main>
+      <MobileNav activeTab={activeTab} onNavigate={setActiveTab} />
     </div>
   );
 }

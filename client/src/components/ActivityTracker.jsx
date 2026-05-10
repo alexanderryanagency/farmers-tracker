@@ -55,7 +55,7 @@ function MiniRaceTrack({ weekData, allPeople }) {
                 <img
                   src={person.photo}
                   alt=""
-                  style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', border: `1.5px solid ${color}`, display: 'block', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+                  style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${color}`, display: 'block', boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
                 />
               </div>
             </div>

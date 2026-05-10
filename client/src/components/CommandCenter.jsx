@@ -1,20 +1,9 @@
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from 'recharts';
-
 const FOLIO_START     = 'Apr 18';
 const FOLIO_END       = 'May 19';
 const DAYS_REMAINING  = 7;
 const WORKING_DAYS    = 22;
 const DAYS_ELAPSED    = WORKING_DAYS - DAYS_REMAINING;
 const PREMIUM_GOAL    = 30000;
-
-const CHART_DATA = [
-  { month: 'Feb', Jayce: 6800, Alissa: 5900 },
-  { month: 'Mar', Jayce: 7400, Alissa: 8200 },
-  { month: 'Apr', Jayce: 9100, Alissa: 8900 },
-  { month: 'May', Jayce: 8055, Alissa: 8478 },
-];
 
 // Fallback dummy data used until kpiData populates
 const DUMMY = {
@@ -65,20 +54,6 @@ function buildTeamKpi(people, kpiData) {
     avgConvPerDay:   totalActive > 0 ? totalConv / totalActive : 0,
   };
 }
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.8px' }}>{label}</div>
-      {payload.map(p => (
-        <div key={p.name} style={{ fontSize: 13, fontWeight: 700, color: p.color, marginBottom: 2 }}>
-          {p.name}: ${p.value.toLocaleString()}
-        </div>
-      ))}
-    </div>
-  );
-};
 
 function MetricRow({ label, value, highlight }) {
   return (
@@ -247,21 +222,6 @@ export default function CommandCenter({ weekData, kpiData, people }) {
         })}
       </div>
 
-      {/* Premium Chart */}
-      <div className="chart-section">
-        <div className="section-title">Monthly Premium — Producer Comparison</div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={CHART_DATA} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="month" tick={{ fill: 'var(--muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 12, color: 'var(--muted)', paddingTop: 8 }} />
-            <Bar dataKey="Jayce"  fill="#FFB800" radius={[4, 4, 0, 0]} maxBarSize={40} />
-            <Bar dataKey="Alissa" fill="#CC0000" radius={[4, 4, 0, 0]} maxBarSize={40} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   );
 }
