@@ -2,7 +2,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
-const WEEKLY_GOAL = 50;
+const FOLIO_START     = 'Apr 18';
+const FOLIO_END       = 'May 19';
+const DAYS_REMAINING  = 7;
+const WORKING_DAYS    = 22;
+const DAYS_ELAPSED    = WORKING_DAYS - DAYS_REMAINING;
+const PREMIUM_GOAL    = 30000;
 
 const CHART_DATA = [
   { month: 'Feb', Jayce: 6800, Alissa: 5900 },
@@ -11,12 +16,31 @@ const CHART_DATA = [
   { month: 'May', Jayce: 8055, Alissa: 8478 },
 ];
 
+// Fallback dummy data used until kpiData populates
+const DUMMY = {
+  jayce:  { totalPremium: 8055,  totalConversations: 29, closeRate: 20.69, policiesPerHH: 1.17 },
+  alissa: { totalPremium: 8478,  totalConversations: 23, closeRate: 17.39, policiesPerHH: 1.25 },
+};
+
+const CAR_COLORS = { jayce: '#FFB800', alissa: '#CC0000', dan: '#8B9BC1' };
+
 function fmt$(n) {
-  if (!n) return '$0';
+  if (!n && n !== 0) return '$0';
   const num = parseFloat(String(n).replace(/[$,\s]/g, ''));
   if (isNaN(num)) return '$0';
   if (num >= 1000) return `$${(num / 1000).toFixed(1)}k`;
   return `$${Math.round(num)}`;
+}
+
+function trendFor(current) {
+  if (!DAYS_ELAPSED) return current;
+  return Math.round((current / DAYS_ELAPSED) * WORKING_DAYS);
+}
+
+function getProducerData(id, kpiData) {
+  const real = kpiData?.data?.[id];
+  if (real && (real.totalPremium > 0 || real.totalConversations > 0)) return real;
+  return DUMMY[id] || null;
 }
 
 function buildTeamKpi(people, kpiData) {
@@ -26,36 +50,26 @@ function buildTeamKpi(people, kpiData) {
   if (!pkpis.length) return null;
 
   const totalConv    = pkpis.reduce((s, k) => s + k.totalConversations, 0);
-  const totalPol     = pkpis.reduce((s, k) => s + k.totalPolicies, 0);
   const totalHH      = pkpis.reduce((s, k) => s + k.totalHouseholds, 0);
   const totalPremium = pkpis.reduce((s, k) => s + k.totalPremium, 0);
   const totalActive  = pkpis.reduce((s, k) => s + (k.activeDays || 0), 0);
-  const { workingDaysElapsed, workingDaysTotal } = pkpis[0];
 
   return {
     totalConversations: totalConv,
-    totalPolicies: totalPol,
-    totalHouseholds: totalHH,
+    totalHouseholds:    totalHH,
+    totalPolicies:      pkpis.reduce((s, k) => s + k.totalPolicies, 0),
     totalPremium,
-    workingDaysElapsed,
-    workingDaysTotal,
-    closeRate: totalConv > 0 ? (totalHH / totalConv) * 100 : 0,
-    policiesPerHH: totalHH > 0 ? totalPol / totalHH : 0,
-    premiumPace: pkpis.reduce((s, k) => s + k.premiumPace, 0),
-    avgConvPerDay: totalActive > 0 ? totalConv / totalActive : 0,
+    closeRate:       totalConv > 0 ? (totalHH / totalConv) * 100 : 0,
+    policiesPerHH:   totalHH > 0 ? pkpis.reduce((s, k) => s + k.totalPolicies, 0) / totalHH : 0,
+    premiumPace:     pkpis.reduce((s, k) => s + k.premiumPace, 0),
+    avgConvPerDay:   totalActive > 0 ? totalConv / totalActive : 0,
   };
 }
-
-const MEDALS = ['🥇', '🥈', '🥉'];
-const CAR_COLORS = ['#FFB800', '#CC0000', '#8B9BC1'];
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      background: 'var(--card)', border: '1px solid var(--border)',
-      borderRadius: 8, padding: '10px 14px',
-    }}>
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.8px' }}>{label}</div>
       {payload.map(p => (
         <div key={p.name} style={{ fontSize: 13, fontWeight: 700, color: p.color, marginBottom: 2 }}>
@@ -66,68 +80,58 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+function MetricRow({ label, value, highlight }) {
+  return (
+    <div className={`pkc-metric-row${highlight ? ' highlight' : ''}`}>
+      <span>{label}</span><strong>{value}</strong>
+    </div>
+  );
+}
+
 export default function CommandCenter({ weekData, kpiData, people }) {
   const teamKpi = buildTeamKpi(people, kpiData);
 
-  const ranked = weekData
-    ? [...people]
-        .map(p => ({ ...p, points: weekData.data[p.id]?.points || 0 }))
-        .sort((a, b) => b.points - a.points)
-    : people.map(p => ({ ...p, points: 0 }));
-
+  // ── KPI goal row ──
   const kpiCards = [
-    {
-      label: 'New Conversations',
-      display: String(teamKpi?.totalConversations ?? 0),
-      goal: 'goal: 60 / folio',
-      good: (teamKpi?.totalConversations ?? 0) >= 40,
-    },
-    {
-      label: 'Close Rate',
-      display: `${(teamKpi?.closeRate ?? 0).toFixed(1)}%`,
-      goal: 'goal: 25%',
-      good: (teamKpi?.closeRate ?? 0) >= 25,
-    },
-    {
-      label: 'Policies / HH',
-      display: teamKpi?.totalHouseholds ? (teamKpi.policiesPerHH).toFixed(2) : '—',
-      goal: 'goal: 1.5',
-      good: (teamKpi?.policiesPerHH ?? 0) >= 1.5,
-    },
-    {
-      label: 'Premium Written',
-      display: fmt$(teamKpi?.totalPremium ?? 0),
-      goal: 'goal: $60k combined',
-      good: (teamKpi?.totalPremium ?? 0) >= 60000,
-    },
+    { label: 'New Conversations', display: String(teamKpi?.totalConversations ?? 0), goal: 'goal: 60 / folio', good: (teamKpi?.totalConversations ?? 0) >= 40 },
+    { label: 'Close Rate',        display: `${(teamKpi?.closeRate ?? 0).toFixed(1)}%`,goal: 'goal: 25%',         good: (teamKpi?.closeRate ?? 0) >= 25 },
+    { label: 'Policies / HH',     display: teamKpi?.totalHouseholds ? teamKpi.policiesPerHH.toFixed(2) : '—', goal: 'goal: 1.5', good: (teamKpi?.policiesPerHH ?? 0) >= 1.5 },
+    { label: 'Premium Written',   display: fmt$(teamKpi?.totalPremium ?? 0), goal: 'goal: $60k combined', good: (teamKpi?.totalPremium ?? 0) >= 60000 },
   ];
 
-  const kpiCards2 = [
-    {
-      label: 'Total Premium',
-      display: fmt$(teamKpi?.totalPremium ?? 0),
-      sub: `projected: ${fmt$(teamKpi?.premiumPace ?? 0)}`,
-    },
-    {
-      label: 'Total Conversations',
-      display: String(teamKpi?.totalConversations ?? 0),
-      sub: `${(teamKpi?.avgConvPerDay ?? 0).toFixed(1)} avg / day`,
-    },
-    {
-      label: 'Close Rate',
-      display: `${(teamKpi?.closeRate ?? 0).toFixed(1)}%`,
-      sub: `${teamKpi?.totalHouseholds ?? 0} HH closed`,
-    },
-    {
-      label: 'Policies / HH',
-      display: teamKpi?.totalHouseholds ? (teamKpi.policiesPerHH).toFixed(2) : '—',
-      sub: `${teamKpi?.totalPolicies ?? 0} policies total`,
-    },
+  // ── Premium race track data ──
+  const producers = people.filter(p => p.role === 'Producer');
+  const dan = people.find(p => p.id === 'dan');
+
+  const producerLanes = producers
+    .map(p => {
+      const d = getProducerData(p.id, kpiData);
+      return { ...p, pData: d };
+    })
+    .sort((a, b) => (b.pData?.totalPremium || 0) - (a.pData?.totalPremium || 0));
+
+  const lanes = [
+    ...producerLanes,
+    ...(dan ? [{ ...dan, pData: null }] : []),
+  ];
+
+  const MARKERS = [
+    { pct: 25, label: '$7.5k' },
+    { pct: 50, label: '$15k' },
+    { pct: 75, label: '$22.5k' },
   ];
 
   return (
     <div className="command-page">
-      {/* Row 1: Goal-tracking KPI cards */}
+      {/* Top row: folio label */}
+      <div className="command-top-row">
+        <span />
+        <div className="folio-label">
+          Folio: {FOLIO_START} – {FOLIO_END} | <span className="folio-remaining">{DAYS_REMAINING} days remaining</span>
+        </div>
+      </div>
+
+      {/* Row 1: team KPI goal cards */}
       <div className="kpi-row">
         {kpiCards.map(card => (
           <div key={card.label} className={`kpi-card ${card.good ? 'good' : 'bad'}`}>
@@ -138,53 +142,68 @@ export default function CommandCenter({ weekData, kpiData, people }) {
         ))}
       </div>
 
-      {/* Horizontal Race Track */}
+      {/* Premium Race Track */}
       <div className="race-section">
-        <div className="section-title">Weekly Leaderboard — Race to 50 pts</div>
-        <div className="horiz-race">
-          <div className="race-pct-header">
-            <div className="race-pct-spacer" />
-            <div className="race-pct-labels">
-              {[25, 50, 75].map(pct => (
-                <span key={pct} className="race-pct-label" style={{ left: `${pct}%` }}>{pct}%</span>
+        <div className="section-title">Premium Race — $30k Goal Per Producer</div>
+        <div className="prem-race">
+          {/* Percentage header labels */}
+          <div className="prem-race-pct-header">
+            <div className="prem-race-pct-spacer" />
+            <div className="prem-race-pct-labels">
+              {MARKERS.map(({ pct, label }) => (
+                <span key={pct} className="prem-race-pct-label" style={{ left: `${pct}%` }}>{label}</span>
               ))}
+              <span className="prem-race-pct-label" style={{ left: '100%' }}>$30k 🏁</span>
             </div>
-            <div className="race-pct-end" />
           </div>
 
-          {ranked.map((person, i) => {
-            const pct = Math.min(person.points / WEEKLY_GOAL, 1);
-            const color = CAR_COLORS[i] || '#8B9BC1';
-            const carLeft = Math.max(2, Math.min(pct * 100, 97));
+          {lanes.map(lane => {
+            const isProducer = lane.role === 'Producer';
+            const d = lane.pData;
+            const premium = d?.totalPremium || 0;
+            const pct = isProducer ? Math.min(premium / PREMIUM_GOAL, 1) : 0;
+            const carLeft = isProducer ? Math.max(2, Math.min(pct * 100, 97)) : 2;
+            const color = CAR_COLORS[lane.id] || '#8B9BC1';
+
+            const statsText = isProducer && d
+              ? `${fmt$(premium)} | ${d.totalConversations} Convos | ${d.closeRate.toFixed(0)}% CR | ${d.policiesPerHH.toFixed(2)} P/HH`
+              : 'N/A — CSR lane';
 
             return (
-              <div key={person.id} className="race-lane">
-                <div className="lane-person-info">
-                  <span className="lane-medal">{MEDALS[i]}</span>
-                  <img src={person.photo} alt={person.name} className="lane-photo" style={{ borderColor: color }} />
-                  <span className="lane-name">{person.name}</span>
+              <div key={lane.id} className="prem-race-lane">
+                <div className="prem-lane-info">
+                  <img src={lane.photo} alt={lane.name} className="prem-lane-photo" style={{ borderColor: color }} />
+                  <span className="prem-lane-name">{lane.name}</span>
                 </div>
 
-                <div className="lane-track-wrap">
-                  <div className="lane-track-bg">
-                    <div
-                      className="lane-track-fill"
-                      style={{ width: `${pct * 100}%`, background: color, opacity: 0.28 }}
-                    />
-                    {[25, 50, 75].map(m => (
-                      <div key={m} className="lane-marker" style={{ left: `${m}%` }} />
+                <div className="prem-lane-track-wrap">
+                  <div className="prem-lane-track-bg">
+                    {isProducer && (
+                      <div className="prem-lane-fill" style={{ width: `${pct * 100}%`, background: color, opacity: 0.25 }} />
+                    )}
+                    {MARKERS.map(({ pct: m }) => (
+                      <div key={m} className="prem-lane-marker" style={{ left: `${m}%` }} />
                     ))}
-                    <div className="lane-finish-line" />
+                    <div className="prem-lane-finish" />
+                    <div className="prem-lane-stats">{statsText}</div>
                   </div>
-                  <div className="lane-car" style={{ left: `${carLeft}%` }}>
-                    <img src={person.photo} alt={person.name} className="lane-car-photo" style={{ borderColor: color }} />
-                  </div>
+                  {isProducer && (
+                    <div className="prem-lane-car" style={{ left: `${carLeft}%` }}>
+                      <img src={lane.photo} alt={lane.name} className="prem-lane-car-photo" style={{ borderColor: color }} />
+                    </div>
+                  )}
                 </div>
 
-                <span className="lane-flag">🏁</span>
-                <div className="lane-pts-col">
-                  <div style={{ color, fontWeight: 800 }}>{person.points} pts</div>
-                  <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--muted)' }}>/ {WEEKLY_GOAL} goal</div>
+                <span className="prem-lane-flag">🏁</span>
+                <div className="prem-lane-pts-col">
+                  {isProducer ? (
+                    <>
+                      <div className="prem-lane-pts-val" style={{ color }}>{fmt$(premium)}</div>
+                      <div className="prem-lane-pts-sub">{(pct * 100).toFixed(0)}% of goal</div>
+                    </>
+                  ) : (
+                    <div className="prem-lane-na">N/A</div>
+                  )}
                 </div>
               </div>
             );
@@ -192,15 +211,40 @@ export default function CommandCenter({ weekData, kpiData, people }) {
         </div>
       </div>
 
-      {/* Row 2: Raw folio metrics */}
-      <div className="kpi-row">
-        {kpiCards2.map(card => (
-          <div key={card.label} className="kpi-card">
-            <div className="kpi-card-label">{card.label}</div>
-            <div className="kpi-card-value" style={{ color: 'var(--text)' }}>{card.display}</div>
-            <div className="kpi-card-goal">{card.sub}</div>
-          </div>
-        ))}
+      {/* Individual Producer KPI Cards */}
+      <div className="section-title">Producer Breakdown</div>
+      <div className="producer-kpi-cards">
+        {producerLanes.map(lane => {
+          const d = lane.pData;
+          const premium = d?.totalPremium || 0;
+          const atGoal = premium >= PREMIUM_GOAL;
+          const need = Math.max(0, PREMIUM_GOAL - premium);
+          const needPerDay = DAYS_REMAINING > 0 ? need / DAYS_REMAINING : 0;
+          const color = CAR_COLORS[lane.id] || '#8B9BC1';
+
+          return (
+            <div key={lane.id} className={`producer-kpi-card ${atGoal ? 'at-goal' : 'below-goal'}`}>
+              <img src={lane.photo} alt={lane.name} className="pkc-photo" style={{ borderColor: color }} />
+              <div className="pkc-content">
+                <div className="pkc-header">
+                  <span className="pkc-name">{lane.name}</span>
+                </div>
+                <div className={`pkc-premium ${atGoal ? 'at-goal' : 'below-goal'}`}>{fmt$(premium)}</div>
+                <div className="pkc-metrics">
+                  <MetricRow label="Goal"            value={fmt$(PREMIUM_GOAL)} />
+                  <MetricRow label="Conversations"   value={d?.totalConversations ?? 0} />
+                  <MetricRow label="Close Rate"      value={`${(d?.closeRate ?? 0).toFixed(1)}%`} />
+                  <MetricRow label="Pol / HH"        value={(d?.policiesPerHH ?? 0).toFixed(2)} />
+                  <MetricRow label="Trending for"    value={fmt$(trendFor(premium))} />
+                  <MetricRow label="Still need"      value={fmt$(need)} highlight={!atGoal} />
+                  {!atGoal && DAYS_REMAINING > 0 && (
+                    <MetricRow label="Need / day"    value={`${fmt$(needPerDay)}/day`} highlight />
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Premium Chart */}
@@ -210,11 +254,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
           <BarChart data={CHART_DATA} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="month" tick={{ fill: 'var(--muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={{ fill: 'var(--muted)', fontSize: 10 }}
-              axisLine={false} tickLine={false}
-              tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
-            />
+            <YAxis tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: 12, color: 'var(--muted)', paddingTop: 8 }} />
             <Bar dataKey="Jayce"  fill="#FFB800" radius={[4, 4, 0, 0]} maxBarSize={40} />

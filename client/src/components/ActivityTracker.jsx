@@ -26,6 +26,48 @@ const DAN_TASKS = [
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MEDALS = ['🥇', '🥈', '🥉'];
+const WEEKLY_GOAL = 50;
+const MINI_COLORS = ['#FFB800', '#CC0000', '#8B9BC1'];
+
+function MiniRaceTrack({ weekData, allPeople }) {
+  const ranked = [...allPeople]
+    .map(p => ({ ...p, points: weekData.data[p.id]?.points || 0 }))
+    .sort((a, b) => b.points - a.points);
+
+  return (
+    <div className="mini-race">
+      <div className="mini-race-title">Weekly Race — {WEEKLY_GOAL} pt goal</div>
+      {ranked.map((person, i) => {
+        const pct = Math.min(person.points / WEEKLY_GOAL, 1);
+        const color = MINI_COLORS[i] || '#8B9BC1';
+        const carLeft = Math.max(2, Math.min(pct * 100, 97));
+        return (
+          <div key={person.id} className="mini-race-lane">
+            <div className="mini-race-person">
+              <img src={person.photo} alt={person.name} style={{ border: `1.5px solid ${color}` }} />
+              {person.name}
+            </div>
+            <div className="mini-race-track-wrap">
+              <div className="mini-race-track-bg">
+                <div className="mini-race-fill" style={{ width: `${pct * 100}%`, background: color, opacity: 0.3 }} />
+              </div>
+              <div className="mini-race-car" style={{ left: `${carLeft}%` }}>
+                <img
+                  src={person.photo}
+                  alt=""
+                  style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', border: `1.5px solid ${color}`, display: 'block', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+                />
+              </div>
+            </div>
+            <div className="mini-race-pts" style={{ color }}>
+              {person.points} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>pts</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function getNewConvPoints(count) {
   const n = Number(count) || 0;
@@ -50,7 +92,7 @@ function shiftDate(dateStr, days) {
   return d.toISOString().split('T')[0];
 }
 
-function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
+function PersonView({ person, today, onRefresh, kpiData, refreshTick, allPeople }) {
   const [viewDate, setViewDate] = useState(today);
   const [weekData, setWeekData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -253,6 +295,13 @@ function PersonView({ person, today, onRefresh, kpiData, refreshTick }) {
         </div>
       )}
 
+      {/* Mini points race track */}
+      {weekData && allPeople && (
+        <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <MiniRaceTrack weekData={weekData} allPeople={allPeople} />
+        </div>
+      )}
+
       <div className="activity-content">
         <div className="tasks-col">
           <div className="tasks-col-header">
@@ -418,6 +467,7 @@ export default function ActivityTracker({ people, today, onRefresh, kpiData, ref
         onRefresh={onRefresh}
         kpiData={kpiData}
         refreshTick={refreshTick}
+        allPeople={people}
       />
     </div>
   );

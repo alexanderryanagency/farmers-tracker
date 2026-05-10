@@ -77,8 +77,6 @@ export default function App() {
       <Sidebar
         activeTab={activeTab}
         onNavigate={setActiveTab}
-        people={PEOPLE}
-        weekData={weekData}
         theme={theme}
         onToggleTheme={toggleTheme}
       />

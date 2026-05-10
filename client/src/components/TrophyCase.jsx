@@ -5,27 +5,35 @@ import SpinWheel from './SpinWheel';
 
 const socket = io();
 
-const PEOPLE_MAP = {
-  jayce:  { name: 'Jayce',  photo: '/jayce.png'  },
-  alissa: { name: 'Alissa', photo: '/alissa.png' },
-  dan:    { name: 'Dan',    photo: '/dan.png'    },
-};
+const ALL_BADGES = [
+  { emoji: '🔥', name: 'Hot Streak',       desc: '3 consecutive days with a sale',        key: 'hotStreak'       },
+  { emoji: '💰', name: '$20k Club',         desc: '$20,000+ premium in a folio',           key: 'club20k'         },
+  { emoji: '💰', name: '$25k Club',         desc: '$25,000+ premium in a folio',           key: 'club25k'         },
+  { emoji: '🏆', name: '$30k Club',         desc: '$30,000+ premium in a folio',           key: 'club30k'         },
+  { emoji: '🎯', name: 'Life Pro',          desc: '3+ life policies in a folio',           key: 'lifePro'         },
+  { emoji: '⚡', name: 'Speed Demon',       desc: '5+ conversations in one day',           key: 'speedDemon'      },
+  { emoji: '🤝', name: 'Bundle King',       desc: '5+ bundles in a folio',                 key: 'bundleKing'      },
+  { emoji: '🌟', name: 'Perfect Week',      desc: '3+ convos every working day in a week', key: 'perfectWeek'     },
+  { emoji: '👑', name: 'Top Producer',      desc: 'Highest premium on team for a folio',  key: 'topProducer'     },
+  { emoji: '🎪', name: 'Referral Machine',  desc: '5+ referrals in a folio',               key: 'referralMachine' },
+];
 
-function formatDate(d) {
-  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function getMonday(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const m = new Date(d);
+  m.setUTCDate(d.getUTCDate() + diff);
+  return m.toISOString().split('T')[0];
 }
 
-function hasConsecutiveActiveDays(taskData, n = 3) {
-  const activeDates = Object.entries(taskData)
-    .filter(([, tasks]) => Object.values(tasks).some(v => v))
-    .map(([date]) => date)
-    .sort();
-
-  for (let i = 0; i <= activeDates.length - n; i++) {
+function checkConsecutiveDates(dates, n) {
+  const unique = [...new Set(dates)].sort();
+  for (let i = 0; i <= unique.length - n; i++) {
     let ok = true;
     for (let j = 0; j < n - 1; j++) {
-      const d1 = new Date(activeDates[i + j] + 'T12:00:00Z');
-      const d2 = new Date(activeDates[i + j + 1] + 'T12:00:00Z');
+      const d1 = new Date(unique[i + j] + 'T12:00:00Z');
+      const d2 = new Date(unique[i + j + 1] + 'T12:00:00Z');
       if ((d2 - d1) / 86400000 !== 1) { ok = false; break; }
     }
     if (ok) return true;
@@ -33,151 +41,96 @@ function hasConsecutiveActiveDays(taskData, n = 3) {
   return false;
 }
 
-function computeBadges(log, kpiData, weekData, folioTasks) {
-  // Premium totals from kpiData
-  const totalPremium = ['jayce', 'alissa'].reduce((s, id) => {
-    return s + (kpiData?.data?.[id]?.totalPremium || 0);
-  }, 0);
-
-  // Log-based counts
-  const bundleCount   = log.filter(e => e.taskId === 'bundle').length;
-  const referralCount = log.filter(e => e.taskId === 'referral' || e.taskId === 'referral_collected').length;
-  const lifeCount     = log.filter(e => e.taskId === 'life_app' || e.taskId === 'life_sale').length;
-
-  // Speed Demon: 5+ convos in one day by any producer
-  let speedDemonEarner = null;
-  if (folioTasks) {
-    outer: for (const personId of ['jayce', 'alissa']) {
-      for (const tasks of Object.values(folioTasks[personId] || {})) {
-        if (Number(tasks.new_conv) >= 5) { speedDemonEarner = personId; break outer; }
-      }
-    }
+function hasPerfectWeek(personFolio) {
+  const weeks = {};
+  for (const [date, tasks] of Object.entries(personFolio)) {
+    const d = new Date(date + 'T12:00:00Z');
+    const dow = d.getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    const monday = getMonday(date);
+    if (!weeks[monday]) weeks[monday] = {};
+    weeks[monday][date] = Number(tasks.new_conv) || 0;
   }
-
-  // Hot Streak: 3+ consecutive active days
-  let hotStreakEarner = null;
-  if (folioTasks) {
-    for (const personId of Object.keys(PEOPLE_MAP)) {
-      if (hasConsecutiveActiveDays(folioTasks[personId] || {}, 3)) {
-        hotStreakEarner = personId;
-        break;
-      }
-    }
+  for (const weekDays of Object.values(weeks)) {
+    const days = Object.values(weekDays);
+    if (days.length >= 5 && days.every(c => c >= 3)) return true;
   }
-
-  // Top Producer: any person with 30+ pts this week
-  let topProducerEarner = null;
-  if (weekData) {
-    const best = Object.entries(PEOPLE_MAP)
-      .map(([id]) => ({ id, pts: weekData.data[id]?.points || 0 }))
-      .sort((a, b) => b.pts - a.pts)[0];
-    if (best?.pts >= 30) topProducerEarner = best.id;
-  }
-
-  // Perfect Week: any producer earns 40+ pts in current week
-  let perfectWeekEarner = null;
-  if (weekData) {
-    for (const id of Object.keys(PEOPLE_MAP)) {
-      if ((weekData.data[id]?.points || 0) >= 40) { perfectWeekEarner = id; break; }
-    }
-  }
-
-  const p = id => PEOPLE_MAP[id] || null;
-  const away = (goal, val) => `$${Math.max(0, goal - val).toLocaleString()} away`;
-
-  return [
-    {
-      emoji: '🔥',
-      name: 'Hot Streak',
-      desc: '3+ active days in a row',
-      earned: !!hotStreakEarner,
-      earner: p(hotStreakEarner),
-      lockLabel: 'Complete tasks 3 consecutive days',
-    },
-    {
-      emoji: '💰',
-      name: '$20k Club',
-      desc: 'Team writes $20,000+ in premium',
-      earned: totalPremium >= 20000,
-      earner: totalPremium >= 20000 ? { name: 'Team' } : null,
-      lockLabel: away(20000, totalPremium),
-    },
-    {
-      emoji: '💰',
-      name: '$25k Club',
-      desc: 'Team writes $25,000+ in premium',
-      earned: totalPremium >= 25000,
-      earner: totalPremium >= 25000 ? { name: 'Team' } : null,
-      lockLabel: away(25000, totalPremium),
-    },
-    {
-      emoji: '💰',
-      name: '$30k Club',
-      desc: 'Team writes $30,000+ in premium',
-      earned: totalPremium >= 30000,
-      earner: totalPremium >= 30000 ? { name: 'Team' } : null,
-      lockLabel: away(30000, totalPremium),
-    },
-    {
-      emoji: '🎯',
-      name: 'Life Pro',
-      desc: '1+ life application submitted',
-      earned: lifeCount >= 1,
-      earner: lifeCount >= 1 ? { name: 'Team' } : null,
-      lockLabel: 'Submit a life application',
-    },
-    {
-      emoji: '⚡',
-      name: 'Speed Demon',
-      desc: '5+ conversations in a single day',
-      earned: !!speedDemonEarner,
-      earner: p(speedDemonEarner),
-      lockLabel: 'Hit 5 conversations in one day',
-    },
-    {
-      emoji: '🤝',
-      name: 'Bundle King',
-      desc: '3+ bundle sales this folio',
-      earned: bundleCount >= 3,
-      earner: bundleCount >= 3 ? { name: 'Team' } : null,
-      lockLabel: `${Math.max(0, 3 - bundleCount)} more bundle${3 - bundleCount !== 1 ? 's' : ''} needed`,
-    },
-    {
-      emoji: '🌟',
-      name: 'Perfect Week',
-      desc: '40+ points earned in a single week',
-      earned: !!perfectWeekEarner,
-      earner: p(perfectWeekEarner),
-      lockLabel: 'Earn 40+ points in one week',
-    },
-    {
-      emoji: '👑',
-      name: 'Top Producer',
-      desc: 'Weekly leader with 30+ points',
-      earned: !!topProducerEarner,
-      earner: p(topProducerEarner),
-      lockLabel: 'Lead the week with 30+ points',
-    },
-    {
-      emoji: '🎪',
-      name: 'Referral Machine',
-      desc: '3+ referrals collected this folio',
-      earned: referralCount >= 3,
-      earner: referralCount >= 3 ? { name: 'Team' } : null,
-      lockLabel: `${Math.max(0, 3 - referralCount)} more referral${3 - referralCount !== 1 ? 's' : ''} needed`,
-    },
-  ];
+  return false;
 }
 
+function computePersonBadges(personId, log, kpiData, folioTasks, maxPremium) {
+  const isProducer = personId !== 'dan';
+  const personLog = log.filter(e => e.person === personId);
+  const personFolio = folioTasks?.[personId] || {};
+  const kpi = kpiData?.data?.[personId] || {};
+  const premium = kpi.totalPremium || 0;
+
+  // Hot Streak: 3 consecutive sale days
+  const saleDates = personLog
+    .filter(e => ['monoline', 'bundle', 'life_app', 'life_sale'].includes(e.taskId))
+    .map(e => e.date);
+  const hotStreak = isProducer && checkConsecutiveDates(saleDates, 3);
+
+  // Premium clubs (producer only)
+  const club20k = isProducer && premium >= 20000;
+  const club25k = isProducer && premium >= 25000;
+  const club30k = isProducer && premium >= 30000;
+
+  // Life Pro: 3+ life policies (producer only)
+  const lifePro = isProducer && personLog.filter(e => e.taskId === 'life_app' || e.taskId === 'life_sale').length >= 3;
+
+  // Speed Demon: 5+ convos in one day (producer only)
+  const speedDemon = isProducer && Object.values(personFolio).some(t => Number(t.new_conv) >= 5);
+
+  // Bundle King: 5+ bundles (producer only)
+  const bundleKing = isProducer && personLog.filter(e => e.taskId === 'bundle').length >= 5;
+
+  // Perfect Week: 3+ convos every working day in a week (producer only)
+  const perfectWeek = isProducer && hasPerfectWeek(personFolio);
+
+  // Top Producer: highest premium on team (producer only, no ties)
+  const topProducer = isProducer && premium > 0 && premium >= maxPremium;
+
+  // Referral Machine: 5+ referrals (all people)
+  const referralMachine = personLog.filter(e =>
+    e.taskId === 'referral' || e.taskId === 'referral_collected'
+  ).length >= 5;
+
+  const result = {};
+  ALL_BADGES.forEach(b => { result[b.key] = false; });
+  if (hotStreak)       result.hotStreak       = true;
+  if (club20k)         result.club20k         = true;
+  if (club25k)         result.club25k         = true;
+  if (club30k)         result.club30k         = true;
+  if (lifePro)         result.lifePro         = true;
+  if (speedDemon)      result.speedDemon      = true;
+  if (bundleKing)      result.bundleKing      = true;
+  if (perfectWeek)     result.perfectWeek     = true;
+  if (topProducer)     result.topProducer     = true;
+  if (referralMachine) result.referralMachine = true;
+
+  return result;
+}
+
+function formatDate(d) {
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const PEOPLE_MAP = {
+  jayce:  { name: 'Jayce',  photo: '/jayce.png'  },
+  alissa: { name: 'Alissa', photo: '/alissa.png' },
+  dan:    { name: 'Dan',    photo: '/dan.png'    },
+};
+
 export default function TrophyCase({ weekData, kpiData, people }) {
-  const [showWheel,   setShowWheel]   = useState(false);
-  const [log,         setLog]         = useState([]);
-  const [folioTasks,  setFolioTasks]  = useState(null);
-  const [editEntry,   setEditEntry]   = useState(null);
-  const [editClient,  setEditClient]  = useState('');
-  const [editPremium, setEditPremium] = useState('');
-  const [editPolicies,setEditPolicies]= useState('');
-  const [deleteId,    setDeleteId]    = useState(null);
+  const [showWheel,    setShowWheel]    = useState(false);
+  const [log,          setLog]          = useState([]);
+  const [folioTasks,   setFolioTasks]   = useState(null);
+  const [editEntry,    setEditEntry]    = useState(null);
+  const [editClient,   setEditClient]   = useState('');
+  const [editPremium,  setEditPremium]  = useState('');
+  const [editPolicies, setEditPolicies] = useState('');
+  const [deleteId,     setDeleteId]     = useState(null);
 
   const fetchLog = useCallback(async () => {
     try {
@@ -199,7 +152,17 @@ export default function TrophyCase({ weekData, kpiData, people }) {
         .sort((a, b) => b.points - a.points)[0]
     : null;
 
-  const badges = computeBadges(log, kpiData, weekData, folioTasks);
+  // Max premium across producers (for Top Producer badge)
+  const maxPremium = Math.max(
+    kpiData?.data?.jayce?.totalPremium || 0,
+    kpiData?.data?.alissa?.totalPremium || 0,
+  );
+
+  // Compute badges per person
+  const personBadges = {};
+  for (const p of people) {
+    personBadges[p.id] = computePersonBadges(p.id, log, kpiData, folioTasks, maxPremium);
+  }
 
   function openEdit(entry) {
     setEditEntry(entry);
@@ -233,7 +196,8 @@ export default function TrophyCase({ weekData, kpiData, people }) {
   return (
     <div className="trophy-page">
       <div className="trophy-inner">
-        {/* ─── Section 1: Spin Wheel ─── */}
+
+        {/* ── Spin Wheel ── */}
         <div>
           <div className="page-title" style={{ marginBottom: 16 }}>
             <Trophy size={20} />
@@ -256,33 +220,63 @@ export default function TrophyCase({ weekData, kpiData, people }) {
           </div>
         </div>
 
-        {/* ─── Section 2: Badge Grid ─── */}
+        {/* ── 3-Column Producer Trophies ── */}
         <div>
-          <div className="section-title">Achievement Badges</div>
-          <div className="badge-grid">
-            {badges.map(badge => (
-              <div key={badge.name} className={`badge-card ${badge.earned ? 'earned' : 'locked'}`}>
-                <div className="badge-emoji">{badge.emoji}</div>
-                <div className="badge-name">{badge.name}</div>
-                <div className="badge-desc">{badge.desc}</div>
-                {badge.earned && badge.earner ? (
-                  <div className="badge-earner">
-                    {badge.earner.photo && (
-                      <img src={badge.earner.photo} alt={badge.earner.name} />
+          <div className="section-title">Producer Trophies</div>
+          <div className="trophy-3col">
+            {people.map(person => {
+              const badges = personBadges[person.id] || {};
+              const earnedBadges = ALL_BADGES.filter(b => badges[b.key]);
+              const pts = weekData?.data?.[person.id]?.points || 0;
+
+              return (
+                <div key={person.id} className="trophy-col">
+                  <img src={person.photo} alt={person.name} className="trophy-col-photo" />
+                  <div className="trophy-col-name">{person.name}</div>
+                  <div className="trophy-col-pts">{pts} pts this week</div>
+                  <div className="trophy-shelf">
+                    {earnedBadges.length === 0 ? (
+                      <div className="trophy-shelf-empty">No trophies yet — keep grinding! 💪</div>
+                    ) : (
+                      earnedBadges.map(badge => (
+                        <div key={badge.key} className="shelf-badge">
+                          <span className="shelf-badge-emoji">{badge.emoji}</span>
+                          <span className="shelf-badge-name">{badge.name}</span>
+                        </div>
+                      ))
                     )}
-                    <span className="badge-earner-name">
-                      {badge.earner.name === 'Team' ? '🏆 Team' : badge.earner.name}
-                    </span>
                   </div>
-                ) : !badge.earned ? (
-                  <div className="badge-lock-label">{badge.lockLabel}</div>
-                ) : null}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* ─── Section 3: Sales Log ─── */}
+        {/* ── Available Trophies ── */}
+        <div>
+          <div className="section-title">Available Trophies</div>
+          <div className="avail-badge-grid">
+            {ALL_BADGES.map(badge => {
+              const earners = people
+                .filter(p => personBadges[p.id]?.[badge.key])
+                .map(p => p.name);
+              const earned = earners.length > 0;
+
+              return (
+                <div key={badge.key} className={`avail-badge-card ${earned ? 'earned' : 'locked'}`}>
+                  <div className="avail-badge-emoji">{badge.emoji}</div>
+                  <div className="avail-badge-name">{badge.name}</div>
+                  <div className="avail-badge-desc">{badge.desc}</div>
+                  {earned && (
+                    <div className="avail-badge-earners">{earners.join(', ')}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Sales Log ── */}
         <div className="trophy-log-section">
           <div className="trophy-log-header">
             <div className="trophy-log-title">Sales Log</div>
@@ -290,7 +284,7 @@ export default function TrophyCase({ weekData, kpiData, people }) {
           </div>
 
           {log.length === 0 ? (
-            <div className="log-empty" style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+            <div className="log-empty">
               No verified entries yet.<br />
               Completing tasks like Sales and Referrals will appear here.
             </div>
@@ -299,15 +293,9 @@ export default function TrophyCase({ weekData, kpiData, people }) {
               <table className="log-table">
                 <thead>
                   <tr>
-                    <th>Producer</th>
-                    <th>Task</th>
-                    <th>Client</th>
-                    <th>Premium</th>
-                    <th>Pol</th>
-                    <th>HH</th>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th></th>
+                    <th>Producer</th><th>Task</th><th>Client</th>
+                    <th>Premium</th><th>Pol</th><th>HH</th>
+                    <th>Date</th><th>Time</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -353,41 +341,18 @@ export default function TrophyCase({ weekData, kpiData, people }) {
         </div>
       </div>
 
-      {/* Edit log entry modal */}
+      {/* Edit modal */}
       {editEntry && (
-        <div className="overlay log-edit-overlay" onClick={e => e.target === e.currentTarget && setEditEntry(null)}>
+        <div className="overlay" onClick={e => e.target === e.currentTarget && setEditEntry(null)}>
           <div className="modal">
             <div className="modal-tag">{editEntry.taskLabel} · {formatDate(editEntry.date)}</div>
             <div className="modal-title">Edit Entry</div>
-            <input
-              className="modal-input"
-              type="text"
-              placeholder="Client name"
-              value={editClient}
-              onChange={e => setEditClient(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveEdit()}
-              autoFocus
-            />
-            <input
-              className="modal-input"
-              type="text"
-              placeholder="Premium amount"
-              value={editPremium}
-              onChange={e => setEditPremium(e.target.value)}
-            />
-            <input
-              className="modal-input"
-              type="number"
-              placeholder="Number of policies"
-              value={editPolicies}
-              onChange={e => setEditPolicies(e.target.value)}
-              min="1"
-            />
+            <input className="modal-input" type="text" placeholder="Client name" value={editClient} onChange={e => setEditClient(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveEdit()} autoFocus />
+            <input className="modal-input" type="text" placeholder="Premium amount" value={editPremium} onChange={e => setEditPremium(e.target.value)} />
+            <input className="modal-input" type="number" placeholder="Number of policies" value={editPolicies} onChange={e => setEditPolicies(e.target.value)} min="1" />
             <div className="modal-actions">
               <button className="modal-cancel" onClick={() => setEditEntry(null)}>Cancel</button>
-              <button className="modal-confirm" onClick={saveEdit} disabled={!editClient.trim()}>
-                Save Changes
-              </button>
+              <button className="modal-confirm" onClick={saveEdit} disabled={!editClient.trim()}>Save Changes</button>
             </div>
           </div>
         </div>

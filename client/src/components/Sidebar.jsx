@@ -9,13 +9,7 @@ const NAV_ITEMS = [
   { id: 'trophy',   label: 'Trophy Case',      Icon: Trophy          },
 ];
 
-export default function Sidebar({ activeTab, onNavigate, people, weekData, theme, onToggleTheme }) {
-  const ranked = weekData
-    ? [...people]
-        .map(p => ({ ...p, points: weekData.data[p.id]?.points || 0 }))
-        .sort((a, b) => b.points - a.points)
-    : people;
-
+export default function Sidebar({ activeTab, onNavigate, theme, onToggleTheme }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -36,24 +30,6 @@ export default function Sidebar({ activeTab, onNavigate, people, weekData, theme
           </button>
         ))}
       </nav>
-
-      <div className="sidebar-team">
-        <div className="sidebar-team-label">The Team</div>
-        <div className="sidebar-team-photos">
-          {ranked.map(person => (
-            <div key={person.id} className="team-member">
-              <img
-                src={person.photo}
-                alt={person.name}
-                className="team-member-photo"
-                onClick={() => onNavigate('activity')}
-                style={{ cursor: 'pointer' }}
-              />
-              <span className="team-member-name">{person.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <div className="sidebar-theme-row">
         <span className="sidebar-theme-label">{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
