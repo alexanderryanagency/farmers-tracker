@@ -8,6 +8,7 @@ import ActivityTracker from './components/ActivityTracker';
 import MyStats from './components/MyStats';
 import CoachsCorner from './components/CoachsCorner';
 import TrophyCase from './components/TrophyCase';
+import LoginScreen from './components/LoginScreen';
 import './App.css';
 
 const MOBILE_NAV = [
@@ -45,6 +46,13 @@ const PEOPLE = [
 ];
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('currentUser');
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
+
   const [activeTab, setActiveTab] = useState('command');
   const [weekData, setWeekData]   = useState(null);
   const [kpiData,  setKpiData]    = useState(null);
@@ -63,6 +71,16 @@ export default function App() {
     document.documentElement.classList.add('transitioning');
     setTimeout(() => document.documentElement.classList.remove('transitioning'), 350);
     setTheme(next);
+  }
+
+  function handleLogin(user) {
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    setCurrentUser(user);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
   }
 
   const today = new Date().toISOString().split('T')[0];
@@ -85,10 +103,15 @@ export default function App() {
   }, [today]);
 
   useEffect(() => {
+    if (!currentUser) { setLoading(false); return; }
     fetchData();
     socket.on('refresh', fetchData);
     return () => socket.off('refresh', fetchData);
-  }, [fetchData]);
+  }, [fetchData, currentUser]);
+
+  if (!currentUser) {
+    return <LoginScreen onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
+  }
 
   if (loading) {
     return (
@@ -106,10 +129,12 @@ export default function App() {
         onNavigate={setActiveTab}
         theme={theme}
         onToggleTheme={toggleTheme}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
       <main className="main-content">
         {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={PEOPLE} theme={theme} />}
-        {activeTab === 'send'     && <SendSuite people={PEOPLE} />}
+        {activeTab === 'send'     && <SendSuite people={PEOPLE} currentUser={currentUser} />}
         {activeTab === 'activity' && <ActivityTracker people={PEOPLE} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
         {activeTab === 'stats'    && <MyStats kpiData={kpiData} people={PEOPLE} />}
         {activeTab === 'coach'    && <CoachsCorner people={PEOPLE} />}

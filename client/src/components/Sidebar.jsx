@@ -1,4 +1,4 @@
-import { LayoutDashboard, Zap, CheckSquare, BarChart2, MessageSquare, Trophy, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Zap, CheckSquare, BarChart2, MessageSquare, Trophy, Sun, Moon, LogOut } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'command',  label: 'Command Center',  Icon: LayoutDashboard },
@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { id: 'trophy',   label: 'Trophy Case',      Icon: Trophy          },
 ];
 
-export default function Sidebar({ activeTab, onNavigate, theme, onToggleTheme }) {
+export default function Sidebar({ activeTab, onNavigate, theme, onToggleTheme, currentUser, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -30,6 +30,16 @@ export default function Sidebar({ activeTab, onNavigate, theme, onToggleTheme })
           </button>
         ))}
       </nav>
+
+      {currentUser && (
+        <div className="sidebar-user">
+          <span className="sidebar-user-name">{currentUser.name}</span>
+          <button className="sidebar-signout-btn" onClick={onLogout} title="Sign out">
+            <LogOut size={12} />
+            Sign Out
+          </button>
+        </div>
+      )}
 
       <div className="sidebar-theme-row">
         <span className="sidebar-theme-label">{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>

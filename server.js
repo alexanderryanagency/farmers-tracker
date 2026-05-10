@@ -6,6 +6,28 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
+const AZ_API_KEY    = '15381426';
+const AZ_API_SECRET = '68f26c8a1344e29a36e7496b72787920a68a94712de21';
+const AZ_BASE_URL   = 'https://app.agencyzoom.com/api/v1';
+const AZ_AUTH       = Buffer.from(`${AZ_API_KEY}:${AZ_API_SECRET}`).toString('base64');
+
+async function azFetch(path, options = {}) {
+  const url = `${AZ_BASE_URL}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Basic ${AZ_AUTH}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch {}
+  if (!res.ok) throw new Error(data.message || data.error || `AZ API error ${res.status}`);
+  return data;
+}
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
@@ -395,9 +417,87 @@ app.get('/api/folio-tasks', (req, res) => {
   res.json(result);
 });
 
-// Claude AI generate endpoint
+// ── AgencyZoom routes ──────────────────────────────────────────────────────
+
+app.get('/api/az/leads', async (req, res) => {
+  const { search } = req.query;
+  if (!search || search.length < 3) return res.json([]);
+  try {
+    const data = await azFetch(`/leads?search=${encodeURIComponent(search)}&limit=10`);
+    const raw = Array.isArray(data) ? data : (data.leads || data.data || []);
+    const leads = raw.map(l => ({
+      id: l.id,
+      name: `${l.first_name || ''}${l.last_name ? ' ' + l.last_name : ''}`.trim(),
+      phone: l.phone || l.mobile_phone || l.cell_phone || '',
+      email: l.email || '',
+    }));
+    res.json(leads);
+  } catch (err) {
+    console.error('AZ leads search error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/az/leads/:id/notes', async (req, res) => {
+  const { note } = req.body;
+  try {
+    await azFetch(`/leads/${req.params.id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('AZ post note error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/az/leads/:id/tasks', async (req, res) => {
+  const { title, due_date, assigned_to } = req.body;
+  try {
+    await azFetch(`/leads/${req.params.id}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ title, due_date, assigned_to, send_notification: false }),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('AZ post task error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/az/leads/:id/email', async (req, res) => {
+  const { subject, body } = req.body;
+  try {
+    await azFetch(`/leads/${req.params.id}/emails`, {
+      method: 'POST',
+      body: JSON.stringify({ subject, body }),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('AZ send email error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/az/leads/:id/text', async (req, res) => {
+  const { message } = req.body;
+  try {
+    await azFetch(`/leads/${req.params.id}/texts`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('AZ send text error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Claude AI generate endpoint ────────────────────────────────────────────
+
 app.post('/api/generate', async (req, res) => {
-  const { producer, clientName, callType, product, premium, notes, tone } = req.body;
+  const { producer, clientName, product, autoPremium, homePremium, notes, tone } = req.body;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
@@ -405,36 +505,54 @@ app.post('/api/generate', async (req, res) => {
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const userPrompt = `Generate professional insurance follow-up content for The Alexander Ryan-Bailey Agency.
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const premiumLines = [];
+  if (homePremium) premiumLines.push(`Home (Farmers): $${homePremium}`);
+  if (autoPremium) premiumLines.push(`Auto (Farmers): $${autoPremium}/mo EFT`);
+  if (autoPremium && homePremium) {
+    const combined = (parseFloat(homePremium) + parseFloat(autoPremium) * 12).toFixed(0);
+    premiumLines.push(`Bundle Total: $${combined} annually`);
+  }
+
+  const userPrompt = `Generate insurance call notes and follow-up content for The Alexander Ryan-Bailey Agency.
 
 Producer: ${producer || 'Agency'}
-Client First Name: ${clientName || 'there'}
-Call Type: ${callType || 'New Quote'}
+Client Name: ${clientName || 'the client'}
 Product Discussed: ${product || 'Auto + Home Bundle'}
-Quote Premium: ${premium ? '$' + premium + '/year' : 'not specified'}
+${autoPremium ? `Auto Premium: $${autoPremium}/mo EFT` : ''}
+${homePremium ? `Home Premium: $${homePremium}` : ''}
+Call Time: ${timeStr} on ${dateStr}
 Tone: ${tone || 'Warm & Friendly'}
-Key Notes from Call: ${notes || 'Standard follow-up'}
+Key Notes from Call:
+${notes || 'Standard follow-up call'}
 
-Return ONLY a valid JSON object with exactly these keys (no markdown, no code blocks):
+Return ONLY valid JSON with no markdown, no code blocks:
 {
-  "az_notes": "Formatted AgencyZoom call notes ready to paste. Include call type, product, premium, key discussion points, and next steps. Professional format with bullet points using dashes.",
+  "az_notes": "Notes in EXACTLY this format:\\n\\n📋 ${product || 'Auto + Home Bundle'} Quote\\n⏱️ Started at ${timeStr} on ${dateStr} | [X] min\\n\\nBuying Temperature:\\n[X] / 10\\n\\nObjections / Blockers:\\n- [list objections extracted from notes, or 'None identified']\\n\\nPersonal Notes (Reconnect Hooks):\\n- [personal details/interests/life events from notes for reconnecting]\\n\\nCurrent Carrier / Premium(s):\\n[current insurance situation from notes]\\n\\nQuoted Premium(s):\\n${premiumLines.join('\\n') || '[premiums as discussed]'}\\n\\nNext Steps:\\nNext Action: [specific action]\\nDue: [YYYY-MM-DD]\\n\\nSecondary Action: [second action]\\nDue: [YYYY-MM-DD]",
   "email": {
-    "subject": "Short compelling subject line for the follow-up email",
-    "body": "Full professional email body starting with greeting. Include personalized details from the call, value proposition, clear next steps, and professional sign-off from ${producer || 'your agent'} at The Alexander Ryan-Bailey Agency."
+    "subject": "Compelling follow-up subject line referencing their specific situation",
+    "body": "Warm personalized email. Start with 'Hi [First Name],' — use the actual first name. Reference specific details from the call. Mention premiums naturally. Clear call to action. NO signature — AgencyZoom handles that automatically."
   },
-  "text_message": "Friendly SMS follow-up under 160 characters referencing the call and next step."
+  "text": "Friendly SMS under 160 characters. Warm, personal, references the call. No links.",
+  "tasks": [
+    {"title": "Specific next action item title", "due_date": "YYYY-MM-DD"},
+    {"title": "Secondary follow-up action title", "due_date": "YYYY-MM-DD"}
+  ]
 }`;
 
   try {
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 1500,
-      system: 'You are an AI assistant for The Alexander Ryan-Bailey Agency, a Farmers Insurance agency. Generate professional, warm, and personalized insurance follow-up content. Agency tagline: Protection. Growth. Legacy. Always return valid JSON only with no markdown formatting or code blocks.',
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      system: 'You are an AI assistant for The Alexander Ryan-Bailey Agency, a Farmers Insurance agency. Generate professional insurance call notes in this producer\'s exact format. Extract all details from raw Krisp notes. Identify objections clearly. Always include buying temperature out of 10, personal reconnect hooks, quoted premiums, and specific next steps with dates. For the email: warm, personalized, no signature needed. For the text: under 160 characters, warm and personal. Agency tagline: Protection. Growth. Legacy. Always return valid JSON only with no markdown formatting or code blocks.',
       messages: [{ role: 'user', content: userPrompt }],
     });
 
-    const text = message.content[0].text.trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const rawText = message.content[0].text.trim();
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in response');
     const data = JSON.parse(jsonMatch[0]);
     res.json(data);
