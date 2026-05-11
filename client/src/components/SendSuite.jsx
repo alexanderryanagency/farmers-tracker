@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Zap, FileText, Mail, MessageCircle, Copy, Edit2, Check, Send } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Zap, FileText, Mail, MessageCircle, Copy, Edit2, Check, Send, X } from 'lucide-react';
 
 const PRODUCTS = ['Auto Only', 'Home Only', 'Auto + Home Bundle', 'Life', 'Bundle + Life'];
 const TONES    = ['Warm & Friendly', 'Professional', 'Direct'];
@@ -119,8 +119,16 @@ export default function SendSuite({ people, currentUser }) {
 
   const [producerName, setProducerName] = useState(defaultProducer);
 
+  // Client search state
+  const [clientName,    setClientName]    = useState('');
+  const [selectedLead,  setSelectedLead]  = useState(null);  // { id, customerName, customerPhone }
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching,     setSearching]     = useState(false);
+  const [showDropdown,  setShowDropdown]  = useState(false);
+  const searchTimerRef = useRef(null);
+  const dropdownRef    = useRef(null);
+
   // Form state
-  const [clientName,  setClientName]  = useState('');
   const [product,     setProduct]     = useState(PRODUCTS[2]);
   const [autoPremium, setAutoPremium] = useState('');
   const [homePremium, setHomePremium] = useState('');
@@ -150,6 +158,56 @@ export default function SendSuite({ people, currentUser }) {
     setTextSent(false);
   }, [result]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function handleClientNameChange(e) {
+    const val = e.target.value;
+    setClientName(val);
+    setSelectedLead(null);
+    clearTimeout(searchTimerRef.current);
+    if (val.trim().length < 3) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/az/leads?search=${encodeURIComponent(val.trim())}`);
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error('Lead search error:', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  }
+
+  function selectLead(lead) {
+    setSelectedLead(lead);
+    setClientName(lead.customerName);
+    setShowDropdown(false);
+    setSearchResults([]);
+  }
+
+  function clearLead() {
+    setSelectedLead(null);
+    setClientName('');
+    setSearchResults([]);
+    setShowDropdown(false);
+  }
+
   async function handleGenerate() {
     if (!clientName.trim()) return;
     setLoading(true);
@@ -174,6 +232,9 @@ export default function SendSuite({ people, currentUser }) {
       if (!res.ok) throw new Error(data.error || 'Failed to generate');
       setResult(data);
 
+      if (selectedLead?.id) {
+        postToAZ(selectedLead.id, data);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -219,9 +280,13 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleApproveEmail(body, subject) {
+    if (!selectedLead?.id) {
+      addToast('Select a lead from the dropdown first', 'error');
+      return;
+    }
     setEmailSending(true);
     try {
-      const res  = await fetch(`/api/az/leads/current/email`, {
+      const res  = await fetch(`/api/az/leads/${selectedLead.id}/email`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject, body }),
@@ -238,9 +303,13 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleApproveText(message) {
+    if (!selectedLead?.id) {
+      addToast('Select a lead from the dropdown first', 'error');
+      return;
+    }
     setTextSending(true);
     try {
-      const res  = await fetch(`/api/az/leads/current/text`, {
+      const res  = await fetch(`/api/az/leads/${selectedLead.id}/text`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
@@ -282,16 +351,52 @@ export default function SendSuite({ people, currentUser }) {
             </div>
           )}
 
-          <div className="form-group">
+          <div className="form-group" ref={dropdownRef} style={{ position: 'relative' }}>
             <label className="form-label">Client Full Name</label>
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. Sarah Johnson"
-              value={clientName}
-              onChange={e => setClientName(e.target.value)}
-              autoComplete="off"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Type to search AgencyZoom…"
+                value={clientName}
+                onChange={handleClientNameChange}
+                onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                autoComplete="off"
+              />
+              {(selectedLead || clientName) && (
+                <button
+                  onClick={clearLead}
+                  style={{
+                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 2,
+                  }}
+                  title="Clear"
+                ><X size={14} /></button>
+              )}
+            </div>
+            {selectedLead && (
+              <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 4 }}>
+                ✓ Linked: {selectedLead.customerName}{selectedLead.customerPhone ? ` · ${selectedLead.customerPhone}` : ''}
+              </div>
+            )}
+            {searching && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Searching…</div>
+            )}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="lead-search-dropdown">
+                {searchResults.map(lead => (
+                  <button key={lead.id} className="lead-result-item" onMouseDown={() => selectLead(lead)}>
+                    <span className="lead-result-name">{lead.customerName}</span>
+                    {lead.customerPhone && <span className="lead-result-phone">{lead.customerPhone}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showDropdown && !searching && searchResults.length === 0 && clientName.trim().length >= 3 && (
+              <div className="lead-search-dropdown">
+                <div className="lead-no-results">No leads found</div>
+              </div>
+            )}
           </div>
 
 
