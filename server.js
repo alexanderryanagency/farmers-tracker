@@ -7,7 +7,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
 const AZ_API_KEY    = '15381426';
-const AZ_API_SECRET = '68f26c8a1344e29a36e7496b72787920a68a94712de21';
+const AZ_API_SECRET = '6a0101a6b851f29a36e7496b72787920a68a94712de21';
 const AZ_BASE_URL   = 'https://app.agencyzoom.com/api/v1';
 const AZ_AUTH       = Buffer.from(`${AZ_API_KEY}:${AZ_API_SECRET}`).toString('base64');
 
