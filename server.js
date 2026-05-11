@@ -17,7 +17,8 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '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';
+const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const AZ_API_KEY    = '15381426';
 const AZ_API_SECRET = '6a0101a6b851f29a36e7496b72787920a68a94712de21';
@@ -532,10 +533,6 @@ app.post('/api/az/leads/:id/text', async (req, res) => {
 app.post('/api/generate', async (req, res) => {
   const { producer, clientName, product, autoPremium, homePremium, notes, tone } = req.body;
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY missing at request time');
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
-  }
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
