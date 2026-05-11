@@ -185,7 +185,8 @@ export default function SendSuite({ people, currentUser }) {
           const data = await res.json();
           setSearchResults(Array.isArray(data) ? data : []);
           setShowDropdown(true);
-        } catch {
+        } catch (err) {
+          console.error('Lead search error:', err);
           setSearchResults([]);
         } finally {
           setSearching(false);
