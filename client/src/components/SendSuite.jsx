@@ -47,7 +47,7 @@ function CopyButton({ text }) {
 
 // ── Output card ───────────────────────────────────────────────────────────────
 
-function OutputCard({ title, icon: Icon, content, subContent, copyText, onApprove, approveLabel, approving, approved }) {
+function OutputCard({ title, icon: Icon, content, subContent, copyText, onApprove, approveLabel, approving, approved, bodyStyle, editMinHeight }) {
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState('');
 
@@ -82,7 +82,7 @@ function OutputCard({ title, icon: Icon, content, subContent, copyText, onApprov
           )}
         </div>
       </div>
-      <div className="output-card-body">
+      <div className="output-card-body" style={bodyStyle}>
         {subContent && (
           <div className="output-email-subject">
             Subject: <span>{subContent}</span>
@@ -93,7 +93,7 @@ function OutputCard({ title, icon: Icon, content, subContent, copyText, onApprov
             value={editVal}
             onChange={e => setEditVal(e.target.value)}
             style={{
-              width: '100%', minHeight: 120, background: 'transparent',
+              width: '100%', minHeight: editMinHeight || 120, background: 'transparent',
               border: '1px dashed #FFB800', borderRadius: 6, padding: 8,
               color: 'var(--text)', fontFamily: 'inherit', fontSize: 13,
               lineHeight: 1.65, resize: 'vertical',
@@ -417,6 +417,7 @@ export default function SendSuite({ people, currentUser }) {
                   title="AgencyZoom Notes"
                   icon={FileText}
                   content={result.az_notes}
+                  bodyStyle={{ maxHeight: 400, overflowY: 'auto' }}
                 />
               )}
               {result.email && (
@@ -430,6 +431,8 @@ export default function SendSuite({ people, currentUser }) {
                   approveLabel="Approve & Send"
                   approving={emailSending}
                   approved={emailSent}
+                  bodyStyle={{ minHeight: 300, overflowY: 'auto' }}
+                  editMinHeight={300}
                 />
               )}
               {result.text && (
@@ -441,6 +444,7 @@ export default function SendSuite({ people, currentUser }) {
                   approveLabel="Approve & Send"
                   approving={textSending}
                   approved={textSent}
+                  bodyStyle={{ minHeight: 120 }}
                 />
               )}
             </>
