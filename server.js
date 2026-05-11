@@ -7,6 +7,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 console.log('Starting server — Node', process.version);
+console.log('ANTHROPIC_API_KEY length:', (process.env.ANTHROPIC_API_KEY || '').length);
 
 const express = require('express');
 const { createServer } = require('http');
@@ -15,6 +16,8 @@ const cors = require('cors');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const AZ_API_KEY    = '15381426';
 const AZ_API_SECRET = '6a0101a6b851f29a36e7496b72787920a68a94712de21';
@@ -530,10 +533,9 @@ app.post('/api/generate', async (req, res) => {
   const { producer, clientName, product, autoPremium, homePremium, notes, tone } = req.body;
 
   if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('ANTHROPIC_API_KEY missing at request time');
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
   }
-
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -574,7 +576,7 @@ Return ONLY valid JSON with no markdown, no code blocks:
 }`;
 
   try {
-    const message = await client.messages.create({
+    const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       system: 'You are an AI assistant for The Alexander Ryan-Bailey Agency, a Farmers Insurance agency. Generate professional insurance call notes in this producer\'s exact format. Extract all details from raw Krisp notes. Identify objections clearly. Always include buying temperature out of 10, personal reconnect hooks, quoted premiums, and specific next steps with dates. For the email: warm, personalized, no signature needed. For the text: under 160 characters, warm and personal. Agency tagline: Protection. Growth. Legacy. Always return valid JSON only with no markdown formatting or code blocks.',
