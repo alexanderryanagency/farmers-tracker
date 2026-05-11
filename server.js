@@ -20,25 +20,50 @@ const store = require('./store');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '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';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
-const AZ_API_KEY    = '15381426';
-const AZ_API_SECRET = '6a0101a6b851f29a36e7496b72787920a68a94712de21';
-const AZ_BASE_URL   = 'https://api.agencyzoom.org';
-const AZ_AUTH       = Buffer.from(`${AZ_API_KEY}:${AZ_API_SECRET}`).toString('base64');
+const AZ_BASE_URL = 'https://api.agencyzoom.com/v1/api';
+const AZ_EMAIL    = 'alexander@alexanderryanagency.com';
+const AZ_PASSWORD = 'Agencyzoom231990!';
 
-async function azFetch(path, options = {}) {
+let azJwt = null;
+
+async function azLogin() {
+  console.log('[AZ] Logging in for JWT…');
+  const res = await fetch(`${AZ_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: AZ_EMAIL, password: AZ_PASSWORD }),
+  });
+  const text = await res.text();
+  console.log('[AZ login] status:', res.status, 'body:', text.slice(0, 200));
+  let data = {};
+  try { data = JSON.parse(text); } catch {}
+  if (!res.ok) throw new Error(data.message || `AZ login failed ${res.status}`);
+  azJwt = data.jwt || data.token || data.access_token;
+  if (!azJwt) throw new Error('AZ login returned no JWT: ' + text.slice(0, 200));
+  console.log('[AZ] JWT obtained, length:', azJwt.length);
+  return azJwt;
+}
+
+async function azFetch(path, options = {}, retry = true) {
+  if (!azJwt) await azLogin();
   const url = `${AZ_BASE_URL}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Basic ${AZ_AUTH}`,
+      'Authorization': `Bearer ${azJwt}`,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
   });
+  if (res.status === 401 && retry) {
+    console.log('[AZ] 401 — re-logging in and retrying');
+    azJwt = null;
+    return azFetch(path, options, false);
+  }
   const text = await res.text();
   let data = {};
   try { data = JSON.parse(text); } catch {}
-  if (!res.ok) throw new Error(data.message || data.error || `AZ API error ${res.status}`);
+  if (!res.ok) throw new Error(data.message || data.error || `AZ API error ${res.status}: ${text.slice(0, 200)}`);
   return data;
 }
 
@@ -436,35 +461,19 @@ app.get('/api/folio-tasks', (req, res) => {
 app.get('/api/az/leads', async (req, res) => {
   const { search } = req.query;
   if (!search || search.length < 3) return res.json([]);
-
-  const url = `https://api.agencyzoom.org/v1/api/leads?search=${encodeURIComponent(search)}&limit=10`;
-  console.log('[AZ leads] GET', url);
-
+  console.log('[AZ leads] searching:', search);
   try {
-    const r = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'api-key': AZ_API_KEY,
-        'api-secret': AZ_API_SECRET,
-        'Content-Type': 'application/json',
-      },
+    const data = await azFetch('/leads/search', {
+      method: 'POST',
+      body: JSON.stringify({ customerName: search, pageSize: 10, page: 0 }),
     });
-    const body = await r.text();
-    console.log('[AZ leads] status:', r.status);
-    console.log('[AZ leads] body:', body.slice(0, 200));
-
-    if (!r.ok) {
-      return res.status(500).json({ error: `AZ returned ${r.status}`, detail: body.slice(0, 200) });
-    }
-
-    let data = {}; try { data = JSON.parse(body); } catch {}
     const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || []);
     const leads = raw.map(l => ({
-      id: l.id,
-      name: `${l.first_name || ''}${l.last_name ? ' ' + l.last_name : ''}`.trim(),
-      phone: l.phone || l.mobile_phone || l.cell_phone || '',
-      email: l.email || '',
+      id:           l.id,
+      customerName: l.customerName || `${l.first_name || ''} ${l.last_name || ''}`.trim(),
+      customerPhone: l.customerPhone || l.phone || l.mobile_phone || '',
     }));
+    console.log('[AZ leads] returned:', leads.length, 'results');
     res.json(leads);
   } catch (err) {
     console.error('[AZ leads] error:', err.message);
