@@ -423,7 +423,23 @@ app.get('/api/az/leads', async (req, res) => {
   const { search } = req.query;
   if (!search || search.length < 3) return res.json([]);
   try {
-    const data = await azFetch(`/leads?search=${encodeURIComponent(search)}&limit=10`);
+    const azUrl = `${AZ_BASE_URL}/leads?search=${encodeURIComponent(search)}&limit=10`;
+    console.log('[AZ leads] GET', azUrl);
+
+    const azRes = await fetch(azUrl, {
+      headers: {
+        'Authorization': `Basic ${AZ_AUTH}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const rawBody = await azRes.text();
+    console.log('[AZ leads] status:', azRes.status);
+    console.log('[AZ leads] raw body:', rawBody);
+
+    let data = {};
+    try { data = JSON.parse(rawBody); } catch {}
+    if (!azRes.ok) throw new Error(data.message || data.error || `AZ API error ${azRes.status}`);
+
     const raw = Array.isArray(data) ? data : (data.leads || data.data || []);
     const leads = raw.map(l => ({
       id: l.id,
@@ -433,7 +449,7 @@ app.get('/api/az/leads', async (req, res) => {
     }));
     res.json(leads);
   } catch (err) {
-    console.error('AZ leads search error:', err.message);
+    console.error('[AZ leads] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
