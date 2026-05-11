@@ -20,66 +20,47 @@ const store = require('./store');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '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';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
-const AZ_BASE_URL = 'https://api.agencyzoom.com/v1/api';
-const AZ_EMAIL    = 'alexander@alexanderryanagency.com';
-const AZ_PASSWORD = 'Agencyzoom231990!';
+const AZ_BASE_URL = 'https://app.agencyzoom.com/v1/api';
 
-let azJwt = null;
-
-const AZ_LOGIN_URLS = [
-  'https://api.agencyzoom.com/v1/api/auth/login',
-  'https://app.agencyzoom.com/v1/api/auth/login',
-  'https://api.agencyzoom.com/api/v1/auth/login',
-];
+let cachedJWT = null;
 
 async function azLogin() {
-  console.log('[AZ] Attempting JWT login…');
-  for (const url of AZ_LOGIN_URLS) {
-    console.log('[AZ login] trying:', url);
-    let res, text;
-    try {
-      res  = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: AZ_EMAIL, password: AZ_PASSWORD }),
-      });
-      text = await res.text();
-    } catch (err) {
-      console.log('[AZ login] fetch error for', url, ':', err.message);
-      continue;
-    }
-    console.log('[AZ login] status:', res.status, 'body:', text.slice(0, 200));
-    if (!res.ok) continue;
-    let data = {};
-    try { data = JSON.parse(text); } catch {}
-    azJwt = data.jwt || data.token || data.access_token;
-    if (!azJwt) {
-      console.log('[AZ login] 200 but no JWT field in response');
-      continue;
-    }
-    console.log('[AZ] JWT obtained from', url, '— length:', azJwt.length);
-    return azJwt;
+  const response = await fetch('https://app.agencyzoom.com/v1/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'alexander@alexanderryanagency.com',
+      password: 'Agencyzoom231990!'
+    })
+  });
+  const data = await response.json();
+  console.log('[AZ login] status:', response.status, 'jwt length:', data.jwt ? data.jwt.length : 0);
+  if (data.jwt) {
+    cachedJWT = data.jwt;
+    return data.jwt;
   }
-  throw new Error('AZ login failed on all URLs — check Railway logs for status codes');
+  throw new Error('AZ login failed: ' + JSON.stringify(data));
 }
 
 async function azFetch(path, options = {}, retry = true) {
-  if (!azJwt) await azLogin();
+  if (!cachedJWT) await azLogin();
   const url = `${AZ_BASE_URL}${path}`;
+  console.log('[AZ fetch]', options.method || 'GET', url);
   const res = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${azJwt}`,
+      'Authorization': `Bearer ${cachedJWT}`,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
   });
   if (res.status === 401 && retry) {
     console.log('[AZ] 401 — re-logging in and retrying');
-    azJwt = null;
+    cachedJWT = null;
     return azFetch(path, options, false);
   }
   const text = await res.text();
+  console.log('[AZ fetch] response status:', res.status, 'body:', text.slice(0, 200));
   let data = {};
   try { data = JSON.parse(text); } catch {}
   if (!res.ok) throw new Error(data.message || data.error || `AZ API error ${res.status}: ${text.slice(0, 200)}`);
@@ -480,19 +461,34 @@ app.get('/api/folio-tasks', (req, res) => {
 app.get('/api/az/leads', async (req, res) => {
   const { search } = req.query;
   if (!search || search.length < 3) return res.json([]);
-  console.log('[AZ leads] searching:', search);
+  console.log('[AZ leads] searching for:', search);
   try {
-    const data = await azFetch('/leads/search', {
+    if (!cachedJWT) await azLogin();
+    const searchUrl = 'https://app.agencyzoom.com/v1/api/leads/search';
+    console.log('[AZ leads] POST', searchUrl, 'body:', JSON.stringify({ customerName: search, pageSize: 10, page: 0 }));
+    const response = await fetch(searchUrl, {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cachedJWT}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ customerName: search, pageSize: 10, page: 0 }),
     });
-    const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || []);
+    const text = await response.text();
+    console.log('[AZ leads] status:', response.status, 'body:', text.slice(0, 300));
+    if (response.status === 401) {
+      cachedJWT = null;
+      return res.status(500).json({ error: 'AZ session expired — try again' });
+    }
+    let data = {};
+    try { data = JSON.parse(text); } catch {}
+    const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || data.content || []);
     const leads = raw.map(l => ({
-      id:           l.id,
-      customerName: l.customerName || `${l.first_name || ''} ${l.last_name || ''}`.trim(),
+      id:            l.id,
+      customerName:  l.customerName  || `${l.first_name || ''} ${l.last_name || ''}`.trim(),
       customerPhone: l.customerPhone || l.phone || l.mobile_phone || '',
     }));
-    console.log('[AZ leads] returned:', leads.length, 'results');
+    console.log('[AZ leads] mapped', leads.length, 'leads');
     res.json(leads);
   } catch (err) {
     console.error('[AZ leads] error:', err.message);
