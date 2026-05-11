@@ -18,6 +18,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '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';
+const ZAPIER_NOTES_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4yzldf1/';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const AZ_BASE_URL = 'https://app.agencyzoom.com/v1/api';
@@ -608,6 +609,23 @@ Return ONLY valid JSON with no markdown, no code blocks:
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in response');
     const data = JSON.parse(jsonMatch[0]);
+
+    fetch(ZAPIER_NOTES_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientName:    clientName,
+        notes:         data.az_notes,
+        email_subject: data.email?.subject,
+        email_body:    data.email?.body,
+        text:          data.text,
+        producer:      producer,
+        product:       product,
+        autoPremium:   autoPremium,
+        homePremium:   homePremium,
+      }),
+    }).catch(err => console.error('[Zapier] webhook error:', err.message));
+
     res.json(data);
   } catch (err) {
     console.error('Generate error:', err);
