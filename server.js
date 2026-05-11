@@ -1,3 +1,13 @@
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION — server will exit:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
+
+console.log('Starting server — Node', process.version);
+
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
