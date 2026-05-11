@@ -610,6 +610,7 @@ Return ONLY valid JSON with no markdown, no code blocks:
     if (!jsonMatch) throw new Error('No JSON in response');
     const data = JSON.parse(jsonMatch[0]);
 
+    console.log('[Zapier payload]', JSON.stringify({ clientName, clientEmail, notes: data.az_notes?.substring(0, 50) }));
     fetch(ZAPIER_NOTES_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
