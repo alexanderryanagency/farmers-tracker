@@ -417,7 +417,7 @@ export default function SendSuite({ people, currentUser }) {
                   title="AgencyZoom Notes"
                   icon={FileText}
                   content={result.az_notes}
-                  bodyStyle={{ maxHeight: 400, overflowY: 'auto' }}
+                  bodyStyle={{}}
                 />
               )}
               {result.email && (
@@ -431,7 +431,7 @@ export default function SendSuite({ people, currentUser }) {
                   approveLabel="Approve & Send"
                   approving={emailSending}
                   approved={emailSent}
-                  bodyStyle={{ minHeight: 300, overflowY: 'auto' }}
+                  bodyStyle={{ minHeight: 300 }}
                   editMinHeight={300}
                 />
               )}
