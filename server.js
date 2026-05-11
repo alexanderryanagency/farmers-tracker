@@ -17,7 +17,7 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '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';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const AZ_BASE_URL = 'https://app.agencyzoom.com/v1/api';
