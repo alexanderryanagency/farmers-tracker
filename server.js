@@ -556,7 +556,7 @@ app.post('/api/az/leads/:id/text', async (req, res) => {
 // ── Claude AI generate endpoint ────────────────────────────────────────────
 
 app.post('/api/generate', async (req, res) => {
-  const { producer, clientName, product, autoPremium, homePremium, notes, tone } = req.body;
+  const { producer, clientName, clientEmail, product, autoPremium, homePremium, notes, tone } = req.body;
 
 
   const now = new Date();
@@ -615,6 +615,7 @@ Return ONLY valid JSON with no markdown, no code blocks:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         clientName:    clientName,
+        clientEmail:   clientEmail,
         notes:         data.az_notes,
         email_subject: data.email?.subject,
         email_body:    data.email?.body,

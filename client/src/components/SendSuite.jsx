@@ -121,6 +121,7 @@ export default function SendSuite({ people, currentUser }) {
 
   // Client search state
   const [clientName,    setClientName]    = useState('');
+  const [clientEmail,   setClientEmail]   = useState('');
   const [selectedLead,  setSelectedLead]  = useState(null);  // { id, customerName, customerPhone }
   const [searchResults, setSearchResults] = useState([]);
   const [searching,     setSearching]     = useState(false);
@@ -221,6 +222,7 @@ export default function SendSuite({ people, currentUser }) {
         body: JSON.stringify({
           producer:    producerName,
           clientName:  firstName,
+          clientEmail,
           product,
           autoPremium: hasAuto ? autoPremium : '',
           homePremium: hasHome ? homePremium : '',
@@ -399,6 +401,18 @@ export default function SendSuite({ people, currentUser }) {
             )}
           </div>
 
+
+          <div className="form-group">
+            <label className="form-label">Client Email <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+            <input
+              className="form-input"
+              type="email"
+              placeholder="client@email.com"
+              value={clientEmail}
+              onChange={e => setClientEmail(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
 
           <div className="form-group">
             <label className="form-label">Product Discussed</label>
