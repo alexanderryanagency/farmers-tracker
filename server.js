@@ -432,35 +432,64 @@ app.get('/api/folio-tasks', (req, res) => {
 app.get('/api/az/leads', async (req, res) => {
   const { search } = req.query;
   if (!search || search.length < 3) return res.json([]);
-  try {
-    const azUrl = `${AZ_BASE_URL}/leads?search=${encodeURIComponent(search)}&limit=10`;
-    console.log('[AZ leads] GET', azUrl);
 
-    const azRes = await fetch(azUrl, {
-      headers: {
-        'Authorization': `Basic ${AZ_AUTH}`,
-        'Content-Type': 'application/json',
-      },
+  const AUTH_HEADER = `Basic ${AZ_AUTH}`;
+
+  // ── Attempt 1: POST /v1/api/leads/files (correct endpoint per AZ docs) ──
+  try {
+    const url1 = 'https://app.agencyzoom.com/v1/api/leads/files';
+    console.log('[AZ leads] Attempt 1 POST', url1, 'search:', search);
+    const r1 = await fetch(url1, {
+      method: 'POST',
+      headers: { 'Authorization': AUTH_HEADER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search }),
     });
-    const rawBody = await azRes.text();
-    console.log('[AZ leads] status:', azRes.status);
-    console.log('[AZ leads] raw body:', rawBody);
+    const body1 = await r1.text();
+    console.log('[AZ leads] Attempt 1 status:', r1.status);
+    console.log('[AZ leads] Attempt 1 body:', body1);
+
+    if (r1.ok) {
+      let data = {};
+      try { data = JSON.parse(body1); } catch {}
+      const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || []);
+      const leads = raw.map(l => ({
+        id: l.id,
+        name: `${l.first_name || ''}${l.last_name ? ' ' + l.last_name : ''}`.trim(),
+        phone: l.phone || l.mobile_phone || l.cell_phone || '',
+        email: l.email || '',
+      }));
+      return res.json(leads);
+    }
+  } catch (err) {
+    console.error('[AZ leads] Attempt 1 error:', err.message);
+  }
+
+  // ── Attempt 2: GET /v1/api/leads?search=[name] ─────────────────────────
+  try {
+    const url2 = `https://app.agencyzoom.com/v1/api/leads?search=${encodeURIComponent(search)}&limit=10`;
+    console.log('[AZ leads] Attempt 2 GET', url2);
+    const r2 = await fetch(url2, {
+      headers: { 'Authorization': AUTH_HEADER, 'Content-Type': 'application/json' },
+    });
+    const body2 = await r2.text();
+    console.log('[AZ leads] Attempt 2 status:', r2.status);
+    console.log('[AZ leads] Attempt 2 body:', body2);
 
     let data = {};
-    try { data = JSON.parse(rawBody); } catch {}
-    if (!azRes.ok) throw new Error(data.message || data.error || `AZ API error ${azRes.status}`);
+    try { data = JSON.parse(body2); } catch {}
+    if (!r2.ok) throw new Error(data.message || data.error || `AZ API error ${r2.status}`);
 
-    const raw = Array.isArray(data) ? data : (data.leads || data.data || []);
+    const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || []);
     const leads = raw.map(l => ({
       id: l.id,
       name: `${l.first_name || ''}${l.last_name ? ' ' + l.last_name : ''}`.trim(),
       phone: l.phone || l.mobile_phone || l.cell_phone || '',
       email: l.email || '',
     }));
-    res.json(leads);
+    return res.json(leads);
   } catch (err) {
-    console.error('[AZ leads] error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[AZ leads] Attempt 2 error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
