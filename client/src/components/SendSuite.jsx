@@ -121,7 +121,6 @@ export default function SendSuite({ people, currentUser }) {
 
   // Form state
   const [clientName,  setClientName]  = useState('');
-  const [azLeadId,    setAzLeadId]    = useState('');
   const [product,     setProduct]     = useState(PRODUCTS[2]);
   const [autoPremium, setAutoPremium] = useState('');
   const [homePremium, setHomePremium] = useState('');
@@ -175,9 +174,6 @@ export default function SendSuite({ people, currentUser }) {
       if (!res.ok) throw new Error(data.error || 'Failed to generate');
       setResult(data);
 
-      if (azLeadId.trim()) {
-        postToAZ(azLeadId.trim(), data);
-      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -223,13 +219,9 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleApproveEmail(body, subject) {
-    if (!azLeadId.trim()) {
-      addToast('No AZ Lead ID — email not sent', 'error');
-      return;
-    }
     setEmailSending(true);
     try {
-      const res  = await fetch(`/api/az/leads/${azLeadId.trim()}/email`, {
+      const res  = await fetch(`/api/az/leads/current/email`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject, body }),
@@ -246,13 +238,9 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleApproveText(message) {
-    if (!azLeadId.trim()) {
-      addToast('No AZ Lead ID — text not sent', 'error');
-      return;
-    }
     setTextSending(true);
     try {
-      const res  = await fetch(`/api/az/leads/${azLeadId.trim()}/text`, {
+      const res  = await fetch(`/api/az/leads/current/text`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
@@ -306,17 +294,6 @@ export default function SendSuite({ people, currentUser }) {
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">AgencyZoom Lead ID <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
-            <input
-              className="form-input"
-              type="text"
-              placeholder="Paste AZ lead ID to enable auto-post"
-              value={azLeadId}
-              onChange={e => setAzLeadId(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
 
           <div className="form-group">
             <label className="form-label">Product Discussed</label>
