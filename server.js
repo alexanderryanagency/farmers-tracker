@@ -465,14 +465,14 @@ app.get('/api/az/leads', async (req, res) => {
   try {
     if (!cachedJWT) await azLogin();
     const searchUrl = 'https://app.agencyzoom.com/v1/api/leads/search';
-    console.log('[AZ leads] POST', searchUrl, 'body:', JSON.stringify({ customerName: search, pageSize: 10, page: 0 }));
+    console.log('[AZ leads] POST', searchUrl, 'body:', JSON.stringify({ name: search, pageSize: 10, page: 0 }));
     const response = await fetch(searchUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${cachedJWT}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ customerName: search, pageSize: 10, page: 0 }),
+      body: JSON.stringify({ name: search, pageSize: 10, page: 0 }),
     });
     const text = await response.text();
     console.log('[AZ leads] status:', response.status, 'body:', text.slice(0, 300));
