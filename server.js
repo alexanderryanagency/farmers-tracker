@@ -26,22 +26,41 @@ const AZ_PASSWORD = 'Agencyzoom231990!';
 
 let azJwt = null;
 
+const AZ_LOGIN_URLS = [
+  'https://api.agencyzoom.com/v1/api/auth/login',
+  'https://app.agencyzoom.com/v1/api/auth/login',
+  'https://api.agencyzoom.com/api/v1/auth/login',
+];
+
 async function azLogin() {
-  console.log('[AZ] Logging in for JWT…');
-  const res = await fetch(`${AZ_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: AZ_EMAIL, password: AZ_PASSWORD }),
-  });
-  const text = await res.text();
-  console.log('[AZ login] status:', res.status, 'body:', text.slice(0, 200));
-  let data = {};
-  try { data = JSON.parse(text); } catch {}
-  if (!res.ok) throw new Error(data.message || `AZ login failed ${res.status}`);
-  azJwt = data.jwt || data.token || data.access_token;
-  if (!azJwt) throw new Error('AZ login returned no JWT: ' + text.slice(0, 200));
-  console.log('[AZ] JWT obtained, length:', azJwt.length);
-  return azJwt;
+  console.log('[AZ] Attempting JWT login…');
+  for (const url of AZ_LOGIN_URLS) {
+    console.log('[AZ login] trying:', url);
+    let res, text;
+    try {
+      res  = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: AZ_EMAIL, password: AZ_PASSWORD }),
+      });
+      text = await res.text();
+    } catch (err) {
+      console.log('[AZ login] fetch error for', url, ':', err.message);
+      continue;
+    }
+    console.log('[AZ login] status:', res.status, 'body:', text.slice(0, 200));
+    if (!res.ok) continue;
+    let data = {};
+    try { data = JSON.parse(text); } catch {}
+    azJwt = data.jwt || data.token || data.access_token;
+    if (!azJwt) {
+      console.log('[AZ login] 200 but no JWT field in response');
+      continue;
+    }
+    console.log('[AZ] JWT obtained from', url, '— length:', azJwt.length);
+    return azJwt;
+  }
+  throw new Error('AZ login failed on all URLs — check Railway logs for status codes');
 }
 
 async function azFetch(path, options = {}, retry = true) {
