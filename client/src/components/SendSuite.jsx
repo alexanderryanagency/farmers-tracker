@@ -360,6 +360,7 @@ export default function SendSuite({ people, currentUser }) {
               <label className="form-label">Producer</label>
               <select className="form-select" value={producerName} onChange={e => setProducerName(e.target.value)}>
                 {producers.map(p => <option key={p.id}>{p.name}</option>)}
+                <option key="arb">Alexander (ARB)</option>
               </select>
             </div>
           )}
