@@ -433,8 +433,6 @@ app.get('/api/az/leads', async (req, res) => {
   const { search } = req.query;
   if (!search || search.length < 3) return res.json([]);
 
-  const authString = Buffer.from(`${AZ_API_KEY}:${AZ_API_SECRET}`).toString('base64');
-
   function parseLeads(data) {
     const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || []);
     return raw.map(l => ({
@@ -445,80 +443,60 @@ app.get('/api/az/leads', async (req, res) => {
     }));
   }
 
-  // ── Attempt 1: GET https://app.agencyzoom.com/v1/api/leads?search=... ──
-  try {
-    const url1 = `https://app.agencyzoom.com/v1/api/leads?search=${encodeURIComponent(search)}&limit=10`;
-    console.log('[AZ leads] Attempt 1 GET', url1);
-    const r1 = await fetch(url1, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-    const body1 = await r1.text();
-    console.log('[AZ leads] Attempt 1 status:', r1.status);
-    console.log('[AZ leads] Attempt 1 body:', body1);
-    if (r1.ok) {
-      let data = {}; try { data = JSON.parse(body1); } catch {}
-      return res.json(parseLeads(data));
+  const headerAuth = {
+    'api-key': AZ_API_KEY,
+    'api-secret': AZ_API_SECRET,
+    'Content-Type': 'application/json',
+  };
+
+  const attempts = [
+    // 1 — header auth, /v1/api path
+    {
+      label: '1 header-auth /v1/api',
+      url: `https://app.agencyzoom.com/v1/api/leads?search=${encodeURIComponent(search)}&limit=10`,
+      headers: headerAuth,
+    },
+    // 2 — header auth, /api/v1 path
+    {
+      label: '2 header-auth /api/v1',
+      url: `https://app.agencyzoom.com/api/v1/leads?search=${encodeURIComponent(search)}&limit=10`,
+      headers: headerAuth,
+    },
+    // 3 — key/secret as query params
+    {
+      label: '3 query-param auth',
+      url: `https://app.agencyzoom.com/v1/api/leads?api_key=${encodeURIComponent(AZ_API_KEY)}&api_secret=${encodeURIComponent(AZ_API_SECRET)}&search=${encodeURIComponent(search)}&limit=10`,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  ];
+
+  let lastStatus = null;
+  let lastSnippet = '';
+
+  for (const attempt of attempts) {
+    try {
+      console.log(`[AZ leads] Attempt ${attempt.label} — GET ${attempt.url}`);
+      const r = await fetch(attempt.url, { method: 'GET', headers: attempt.headers });
+      const body = await r.text();
+      lastStatus  = r.status;
+      lastSnippet = body.slice(0, 200);
+      console.log(`[AZ leads] Attempt ${attempt.label} status:`, r.status);
+      console.log(`[AZ leads] Attempt ${attempt.label} body:`, lastSnippet);
+
+      if (r.ok) {
+        let data = {}; try { data = JSON.parse(body); } catch {}
+        return res.json(parseLeads(data));
+      }
+    } catch (err) {
+      console.error(`[AZ leads] Attempt ${attempt.label} error:`, err.message);
+      lastSnippet = err.message;
     }
-  } catch (err) {
-    console.error('[AZ leads] Attempt 1 error:', err.message);
   }
 
-  // ── Attempt 2: GET https://app.agencyzoom.com/api/v1/leads?search=... ──
-  try {
-    const url2 = `https://app.agencyzoom.com/api/v1/leads?search=${encodeURIComponent(search)}&limit=10`;
-    console.log('[AZ leads] Attempt 2 GET', url2);
-    const r2 = await fetch(url2, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-    const body2 = await r2.text();
-    console.log('[AZ leads] Attempt 2 status:', r2.status);
-    console.log('[AZ leads] Attempt 2 body:', body2);
-    if (r2.ok) {
-      let data = {}; try { data = JSON.parse(body2); } catch {}
-      return res.json(parseLeads(data));
-    }
-  } catch (err) {
-    console.error('[AZ leads] Attempt 2 error:', err.message);
-  }
-
-  // ── Attempt 3: GET https://app.agencyzoom.com/v1/leads?search=... ──────
-  try {
-    const url3 = `https://app.agencyzoom.com/v1/leads?search=${encodeURIComponent(search)}&limit=10`;
-    console.log('[AZ leads] Attempt 3 GET', url3);
-    const r3 = await fetch(url3, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-    const body3 = await r3.text();
-    console.log('[AZ leads] Attempt 3 status:', r3.status);
-    console.log('[AZ leads] Attempt 3 body:', body3);
-    if (r3.ok) {
-      let data = {}; try { data = JSON.parse(body3); } catch {}
-      return res.json(parseLeads(data));
-    }
-    let errData = {}; try { errData = JSON.parse(body3); } catch {}
-    return res.status(500).json({
-      error: `All AZ endpoints failed. Last status: ${r3.status}`,
-      detail: errData.message || errData.error || body3.slice(0, 200),
-    });
-  } catch (err) {
-    console.error('[AZ leads] Attempt 3 error:', err.message);
-    return res.status(500).json({ error: err.message });
-  }
+  return res.status(500).json({
+    error: `All AZ auth attempts failed (last HTTP status: ${lastStatus})`,
+    detail: lastSnippet,
+  });
 });
 
 app.post('/api/az/leads/:id/notes', async (req, res) => {
