@@ -659,11 +659,12 @@ app.post('/api/send-email', async (req, res) => {
   const producerEmail = producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
                         producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
                         'arb@alexanderryanagency.com';
+  const htmlBody = emailBody.replace(/\n/g, '<br>');
   try {
     await fetch(ZAPIER_EMAIL_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientName, clientEmail, producer, producerEmail, emailSubject, emailBody })
+      body: JSON.stringify({ clientName, clientEmail, producer, producerEmail, emailSubject, emailBody: htmlBody })
     });
     res.json({ ok: true });
   } catch (err) {
