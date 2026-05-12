@@ -282,18 +282,9 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleApproveEmail(body, subject) {
-    if (!selectedLead?.id) {
-      addToast('Select a lead from the dropdown first', 'error');
-      return;
-    }
     setEmailSending(true);
     try {
-      const [azRes] = await Promise.all([
-        fetch(`/api/az/leads/${selectedLead.id}/email`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, body }),
-        }),
+      const requests = [
         fetch('/api/send-email', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -305,11 +296,17 @@ export default function SendSuite({ people, currentUser }) {
             emailBody:    body,
           }),
         }),
-      ]);
-      const data = await azRes.json();
-      if (!azRes.ok || data.error) throw new Error(data.error || 'Failed');
+      ];
+      if (selectedLead?.id) {
+        requests.push(fetch(`/api/az/leads/${selectedLead.id}/email`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body }),
+        }));
+      }
+      await Promise.all(requests);
       setEmailSent(true);
-      addToast('✅ Email sent via AgencyZoom');
+      addToast('✅ Email sent');
     } catch (err) {
       addToast(`⚠️ Email send failed: ${err.message}`, 'error');
     } finally {
@@ -318,18 +315,9 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleApproveText(message) {
-    if (!selectedLead?.id) {
-      addToast('Select a lead from the dropdown first', 'error');
-      return;
-    }
     setTextSending(true);
     try {
-      const [azRes] = await Promise.all([
-        fetch(`/api/az/leads/${selectedLead.id}/text`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
-        }),
+      const requests = [
         fetch('/api/send-text', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -340,11 +328,17 @@ export default function SendSuite({ people, currentUser }) {
             textMessage: message,
           }),
         }),
-      ]);
-      const data = await azRes.json();
-      if (!azRes.ok || data.error) throw new Error(data.error || 'Failed');
+      ];
+      if (selectedLead?.id) {
+        requests.push(fetch(`/api/az/leads/${selectedLead.id}/text`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        }));
+      }
+      await Promise.all(requests);
       setTextSent(true);
-      addToast('✅ Text sent via AgencyZoom');
+      addToast('✅ Text sent');
     } catch (err) {
       addToast(`⚠️ Text send failed: ${err.message}`, 'error');
     } finally {
