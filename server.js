@@ -21,6 +21,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'sk-ant-api03-vxF9-WT
 const ZAPIER_NOTES_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ykpdtv/';
 const ZAPIER_TASKS_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4yknjqy/';
 const ZAPIER_EMAIL_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ykv036/';
+const ZAPIER_TEXT_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ywuw56/';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const AZ_BASE_URL = 'https://app.agencyzoom.com/v1/api';
@@ -658,6 +659,20 @@ Return ONLY valid JSON with no markdown, no code blocks:
         producerEmail: producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
                        producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
                        'arb@alexanderryanagency.com'
+      })
+    });
+
+    await fetch(ZAPIER_TEXT_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientName: clientName,
+        clientEmail: clientEmail,
+        producer: producer,
+        producerEmail: producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
+                       producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
+                       'arb@alexanderryanagency.com',
+        textMessage: data.text || ''
       })
     });
 
