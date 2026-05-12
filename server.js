@@ -654,7 +654,10 @@ Return ONLY valid JSON with no markdown, no code blocks:
         clientEmail: clientEmail,
         producer: producer,
         emailSubject: data.email?.subject || '',
-        emailBody: data.email?.body || ''
+        emailBody: data.email?.body || '',
+        producerEmail: producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
+                       producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
+                       'arb@alexanderryanagency.com'
       })
     });
 
