@@ -288,13 +288,26 @@ export default function SendSuite({ people, currentUser }) {
     }
     setEmailSending(true);
     try {
-      const res  = await fetch(`/api/az/leads/${selectedLead.id}/email`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, body }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed');
+      const [azRes] = await Promise.all([
+        fetch(`/api/az/leads/${selectedLead.id}/email`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body }),
+        }),
+        fetch('/api/send-email', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName:   clientName,
+            clientEmail:  clientEmail,
+            producer:     producerName,
+            emailSubject: subject,
+            emailBody:    body,
+          }),
+        }),
+      ]);
+      const data = await azRes.json();
+      if (!azRes.ok || data.error) throw new Error(data.error || 'Failed');
       setEmailSent(true);
       addToast('✅ Email sent via AgencyZoom');
     } catch (err) {
@@ -311,13 +324,25 @@ export default function SendSuite({ people, currentUser }) {
     }
     setTextSending(true);
     try {
-      const res  = await fetch(`/api/az/leads/${selectedLead.id}/text`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed');
+      const [azRes] = await Promise.all([
+        fetch(`/api/az/leads/${selectedLead.id}/text`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        }),
+        fetch('/api/send-text', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName:  clientName,
+            clientEmail: clientEmail,
+            producer:    producerName,
+            textMessage: message,
+          }),
+        }),
+      ]);
+      const data = await azRes.json();
+      if (!azRes.ok || data.error) throw new Error(data.error || 'Failed');
       setTextSent(true);
       addToast('✅ Text sent via AgencyZoom');
     } catch (err) {

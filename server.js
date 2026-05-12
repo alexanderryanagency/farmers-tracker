@@ -647,39 +647,46 @@ Return ONLY valid JSON with no markdown, no code blocks:
       })
     });
 
-    await fetch(ZAPIER_EMAIL_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientName: clientName,
-        clientEmail: clientEmail,
-        producer: producer,
-        emailSubject: data.email?.subject || '',
-        emailBody: data.email?.body || '',
-        producerEmail: producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
-                       producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
-                       'arb@alexanderryanagency.com'
-      })
-    });
-
-    await fetch(ZAPIER_TEXT_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientName: clientName,
-        clientEmail: clientEmail,
-        producer: producer,
-        producerEmail: producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
-                       producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
-                       'arb@alexanderryanagency.com',
-        textMessage: data.text || ''
-      })
-    });
-
     res.json(data);
   } catch (err) {
     console.error('Generate error:', err);
     res.status(500).json({ error: err.message || 'Failed to generate content' });
+  }
+});
+
+app.post('/api/send-email', async (req, res) => {
+  const { clientName, clientEmail, producer, emailSubject, emailBody } = req.body;
+  const producerEmail = producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
+                        producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
+                        'arb@alexanderryanagency.com';
+  try {
+    await fetch(ZAPIER_EMAIL_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientName, clientEmail, producer, producerEmail, emailSubject, emailBody })
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('send-email webhook error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/send-text', async (req, res) => {
+  const { clientName, clientEmail, producer, textMessage } = req.body;
+  const producerEmail = producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
+                        producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
+                        'arb@alexanderryanagency.com';
+  try {
+    await fetch(ZAPIER_TEXT_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientName, clientEmail, producer, producerEmail, textMessage })
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('send-text webhook error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
