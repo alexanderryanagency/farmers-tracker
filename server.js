@@ -556,6 +556,7 @@ app.post('/api/az/leads/:id/text', async (req, res) => {
 // ── Claude AI generate endpoint ────────────────────────────────────────────
 
 app.post('/api/generate', async (req, res) => {
+  console.log('[GENERATE HIT]', new Date().toISOString());
   const { producer, clientName, clientEmail, product, autoPremium, homePremium, notes, tone } = req.body;
 
 
