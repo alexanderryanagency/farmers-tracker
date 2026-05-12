@@ -580,8 +580,6 @@ app.post('/api/generate', async (req, res) => {
 Producer: ${producer || 'Agency'}
 Client Name: ${clientName || 'the client'}
 Product Discussed: ${product || 'Auto + Home Bundle'}
-${autoPremium ? `Auto Premium: $${autoPremium}/mo EFT` : ''}
-${homePremium ? `Home Premium: $${homePremium}` : ''}
 Call Time: ${timeStr} on ${dateStr}
 Tone: ${tone || 'Warm & Friendly'}
 Key Notes from Call:
@@ -592,7 +590,7 @@ Return ONLY valid JSON with no markdown, no code blocks:
   "az_notes": "Notes in EXACTLY this format:\\n\\n📋 ${product || 'Auto + Home Bundle'} Quote\\n⏱️ Started at ${timeStr} on ${dateStr} | [X] min\\n\\nBuying Temperature:\\n[X] / 10\\n\\nObjections / Blockers:\\n- [list objections extracted from notes, or 'None identified']\\n\\nPersonal Notes (Reconnect Hooks):\\n- [personal details/interests/life events from notes for reconnecting]\\n\\nCurrent Carrier / Premium(s):\\n[current insurance situation from notes]\\n\\nQuoted Premium(s):\\n${premiumLines.join('\\n') || '[premiums as discussed]'}\\n\\nNext Steps:\\nNext Action: [specific action]\\nDue: [YYYY-MM-DD]\\n\\nSecondary Action: [second action]\\nDue: [YYYY-MM-DD]",
   "email": {
     "subject": "Compelling follow-up subject line referencing their specific situation",
-    "body": "Warm personalized email. Start with 'Hi [First Name],' — use the actual first name. Reference specific details from the call. Mention premiums naturally. Clear call to action. NO signature — AgencyZoom handles that automatically."
+    "body": "Warm personalized email. Start with 'Hi [First Name],' — use the actual first name. Reference specific details from the call. Extract and mention any premium amounts naturally from the call notes — do not invent numbers not present in the notes. Clear call to action. NO signature — AgencyZoom handles that automatically."
   },
   "text": "Friendly SMS under 160 characters. Warm, personal, references the call. No links.",
   "tasks": [
