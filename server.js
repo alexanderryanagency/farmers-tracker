@@ -611,6 +611,7 @@ Return ONLY valid JSON with no markdown, no code blocks:
     const data = JSON.parse(jsonMatch[0]);
 
     console.log('[Zapier payload]', JSON.stringify({ clientName, clientEmail, notes: data.az_notes?.substring(0, 50) }));
+    console.log('[ZAPIER EMAIL TEST]', clientEmail);
     fetch(ZAPIER_NOTES_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
