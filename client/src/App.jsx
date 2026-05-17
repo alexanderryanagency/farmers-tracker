@@ -9,6 +9,7 @@ import MyStats from './components/MyStats';
 import CoachsCorner from './components/CoachsCorner';
 import TrophyCase from './components/TrophyCase';
 import LoginScreen from './components/LoginScreen';
+import { getLocalDateString } from './utils/folio';
 import './App.css';
 
 const MOBILE_NAV = [
@@ -83,7 +84,7 @@ export default function App() {
     setCurrentUser(null);
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   const fetchData = useCallback(async () => {
     try {

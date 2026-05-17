@@ -172,9 +172,17 @@ app.get('/api/week', (req, res) => {
   res.json({ weekDates, weekKey, data });
 });
 
-// Current sales month: April 18 – May 19, 2026
-const SALES_MONTH_START = '2026-04-18';
-const SALES_MONTH_END   = '2026-05-19';
+const CONFIRMED_2026_FOLIOS = [
+  { name: 'May 2026 Folio', start: '2026-04-18', end: '2026-05-19' },
+  { name: 'June 2026 Folio', start: '2026-05-20', end: '2026-06-18' },
+  { name: 'July 2026 Folio', start: '2026-06-19', end: '2026-07-17' },
+];
+
+// Farmers may switch to calendar-month sales cycles later in 2026; update this
+// confirmed folio config once the remaining 2026 schedule is known.
+function getActiveFolio(dateStr) {
+  return CONFIRMED_2026_FOLIOS.find(folio => dateStr >= folio.start && dateStr <= folio.end) || null;
+}
 
 function dateRange(start, end) {
   const dates = [];
@@ -196,8 +204,9 @@ function workingDays(dates) {
 
 app.get('/api/kpi', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
+  const activeFolio = getActiveFolio(today);
 
-  if (today < SALES_MONTH_START) {
+  if (!activeFolio) {
     const zero = {
       totalConversations: 0, totalPolicies: 0,
       totalHouseholds: 0, totalPremium: 0,
@@ -207,16 +216,16 @@ app.get('/api/kpi', (req, res) => {
     return res.json({ data: Object.fromEntries(PERSONS.map(p => [p, zero])) });
   }
 
-  const periodEnd = today <= SALES_MONTH_END ? today : SALES_MONTH_END;
-  const elapsedDates = dateRange(SALES_MONTH_START, periodEnd);
-  const fullDates    = dateRange(SALES_MONTH_START, SALES_MONTH_END);
+  const periodEnd = today <= activeFolio.end ? today : activeFolio.end;
+  const elapsedDates = dateRange(activeFolio.start, periodEnd);
+  const fullDates    = dateRange(activeFolio.start, activeFolio.end);
   const workingDaysElapsed = workingDays(elapsedDates);
   const workingDaysTotal   = workingDays(fullDates);
 
   const allLog = store.getLog();
   const saleMap = new Map();
   for (const entry of allLog) {
-    if (entry.date < SALES_MONTH_START || entry.date > periodEnd) continue;
+    if (entry.date < activeFolio.start || entry.date > periodEnd) continue;
     if (entry.taskId !== 'monoline' && entry.taskId !== 'bundle') continue;
     const key = `${entry.person}-${entry.date}-${entry.taskId}`;
     const existing = saleMap.get(key);
@@ -447,7 +456,9 @@ app.delete('/api/coaching/:id', (req, res) => {
 // Folio task data — for badge calculations
 app.get('/api/folio-tasks', (req, res) => {
   const result = {};
-  const dates = dateRange(SALES_MONTH_START, SALES_MONTH_END);
+  const today = req.query.date || new Date().toISOString().split('T')[0];
+  const activeFolio = getActiveFolio(today);
+  const dates = activeFolio ? dateRange(activeFolio.start, activeFolio.end) : [];
   for (const person of PERSONS) {
     result[person] = {};
     for (const date of dates) {

@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { BarChart2 } from 'lucide-react';
-
-const FOLIO_START = 'April 18';
-const FOLIO_END   = 'May 19, 2026';
-const DAYS_ELAPSED   = 15;
-const DAYS_REMAINING = 7;
-const WORKING_DAYS   = 22;
+import { getActiveFolio, getFolioDisplay } from '../utils/folio';
 
 const GOALS = {
   conversations: 60,
@@ -15,34 +10,34 @@ const GOALS = {
   lifeApps:      1,
 };
 
-const DUMMY = {
+const ZERO_STATS = {
   jayce: {
-    conversations: 29,
-    closeRate: 20.69,
-    polPerHH: 1.17,
-    premium: 8055,
-    households: 6,
-    policies: 7,
-    lifeApps: 1,
-    referralsClosed: 2,
-    referralsQuoted: 4,
-    dials: 195,
-    talkTime: '11h 57m',
-    talkTimeAvg: '3h 41m',
+    conversations: 0,
+    closeRate: 0,
+    polPerHH: 0,
+    premium: 0,
+    households: 0,
+    policies: 0,
+    lifeApps: 0,
+    referralsClosed: 0,
+    referralsQuoted: 0,
+    dials: 0,
+    talkTime: '0h 0m',
+    talkTimeAvg: '0h 0m',
   },
   alissa: {
-    conversations: 23,
-    closeRate: 17.39,
-    polPerHH: 1.25,
-    premium: 8478,
-    households: 4,
-    policies: 5,
-    lifeApps: 1,
-    referralsClosed: 1,
-    referralsQuoted: 3,
-    dials: 208,
-    talkTime: '12h 42m',
-    talkTimeAvg: '3h 40m',
+    conversations: 0,
+    closeRate: 0,
+    polPerHH: 0,
+    premium: 0,
+    households: 0,
+    policies: 0,
+    lifeApps: 0,
+    referralsClosed: 0,
+    referralsQuoted: 0,
+    dials: 0,
+    talkTime: '0h 0m',
+    talkTimeAvg: '0h 0m',
   },
 };
 
@@ -51,13 +46,12 @@ const PRODUCERS = [
   { id: 'alissa', name: 'Alissa', photo: '/alissa.png' },
 ];
 
-function trendFor(current) {
-  return Math.round((current / DAYS_ELAPSED) * WORKING_DAYS);
-}
+function trendFor(current) { return current; }
 function stillNeedPerDay(goal, current) {
   const remaining = goal - current;
   if (remaining <= 0) return 0;
-  return (remaining / DAYS_REMAINING).toFixed(1);
+  const { daysRemaining } = getFolioDisplay(getActiveFolio());
+  return daysRemaining > 0 ? (remaining / daysRemaining).toFixed(1) : '0.0';
 }
 function fmt$(n) {
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
@@ -75,7 +69,8 @@ function MetaRow({ label, value, highlight }) {
 
 export default function MyStats() {
   const [producerId, setProducerId] = useState('jayce');
-  const data = DUMMY[producerId];
+  const data = ZERO_STATS[producerId];
+  const folioDisplay = getFolioDisplay(getActiveFolio());
 
   const premiumGood = data.premium >= GOALS.premium;
   const convGood    = data.conversations >= GOALS.conversations;
@@ -112,8 +107,8 @@ export default function MyStats() {
               My Stats
             </div>
             <div className="stats-period">
-              Folio Period: <strong>{FOLIO_START} – {FOLIO_END}</strong>
-              <span style={{ marginLeft: 14, color: 'var(--red)', fontWeight: 700 }}>{DAYS_REMAINING} days remaining</span>
+              Folio Period: <strong>{folioDisplay.label.replace('Folio: ', '')}</strong>
+              <span style={{ marginLeft: 14, color: 'var(--red)', fontWeight: 700 }}>{folioDisplay.daysRemaining} days remaining</span>
             </div>
           </div>
         </div>
@@ -213,7 +208,7 @@ export default function MyStats() {
                 {data.dials}
               </div>
               <div className="stat-card-meta">
-                <MetaRow label="Avg / day" value={(data.dials / DAYS_ELAPSED).toFixed(1)} />
+                <MetaRow label="Avg / day" value="0.0" />
               </div>
             </div>
 

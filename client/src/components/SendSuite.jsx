@@ -430,7 +430,7 @@ export default function SendSuite({ people, currentUser }) {
 
           {!selectedLead && (
             <div className="form-group">
-              <label className="form-label">Client Email <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+              <label className="form-label">Manual Email Fallback</label>
               <input
                 className="form-input"
                 type="email"
@@ -439,6 +439,9 @@ export default function SendSuite({ people, currentUser }) {
                 onChange={e => setClientEmail(e.target.value)}
                 autoComplete="off"
               />
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                Only use this if the AgencyZoom lead search cannot find the client.
+              </div>
             </div>
           )}
 

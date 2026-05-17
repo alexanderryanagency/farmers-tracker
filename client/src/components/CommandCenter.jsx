@@ -1,15 +1,6 @@
-const FOLIO_START     = 'Apr 18';
-const FOLIO_END       = 'May 19';
-const DAYS_REMAINING  = 7;
-const WORKING_DAYS    = 22;
-const DAYS_ELAPSED    = WORKING_DAYS - DAYS_REMAINING;
-const PREMIUM_GOAL    = 30000;
+import { getActiveFolio, getFolioDisplay } from '../utils/folio';
 
-// Fallback dummy data used until kpiData populates
-const DUMMY = {
-  jayce:  { totalPremium: 8055,  totalConversations: 29, closeRate: 20.69, policiesPerHH: 1.17 },
-  alissa: { totalPremium: 8478,  totalConversations: 23, closeRate: 17.39, policiesPerHH: 1.25 },
-};
+const PREMIUM_GOAL    = 30000;
 
 const CAR_COLORS = { jayce: '#FFB800', alissa: '#CC0000', dan: '#8B9BC1' };
 
@@ -22,14 +13,12 @@ function fmt$(n) {
 }
 
 function trendFor(current) {
-  if (!DAYS_ELAPSED) return current;
-  return Math.round((current / DAYS_ELAPSED) * WORKING_DAYS);
+  return current;
 }
 
 function getProducerData(id, kpiData) {
   const real = kpiData?.data?.[id];
-  if (real && (real.totalPremium > 0 || real.totalConversations > 0)) return real;
-  return DUMMY[id] || null;
+  return real || null;
 }
 
 function buildTeamKpi(people, kpiData) {
@@ -65,6 +54,7 @@ function MetricRow({ label, value, highlight }) {
 
 export default function CommandCenter({ weekData, kpiData, people }) {
   const teamKpi = buildTeamKpi(people, kpiData);
+  const folioDisplay = getFolioDisplay(getActiveFolio());
 
   // ── KPI goal row ──
   const kpiCards = [
@@ -102,7 +92,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
       <div className="command-top-row">
         <span />
         <div className="folio-label">
-          Folio: {FOLIO_START} – {FOLIO_END} | <span className="folio-remaining">{DAYS_REMAINING} days remaining</span>
+          {folioDisplay.label} | <span className="folio-remaining">{folioDisplay.daysRemaining} days remaining</span>
         </div>
       </div>
 
@@ -194,7 +184,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
           const premium = d?.totalPremium || 0;
           const atGoal = premium >= PREMIUM_GOAL;
           const need = Math.max(0, PREMIUM_GOAL - premium);
-          const needPerDay = DAYS_REMAINING > 0 ? need / DAYS_REMAINING : 0;
+          const needPerDay = folioDisplay.daysRemaining > 0 ? need / folioDisplay.daysRemaining : 0;
           const color = CAR_COLORS[lane.id] || '#8B9BC1';
 
           return (
@@ -212,7 +202,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
                   <MetricRow label="Pol / HH"        value={(d?.policiesPerHH ?? 0).toFixed(2)} />
                   <MetricRow label="Trending for"    value={fmt$(trendFor(premium))} />
                   <MetricRow label="Still need"      value={fmt$(need)} highlight={!atGoal} />
-                  {!atGoal && DAYS_REMAINING > 0 && (
+                  {!atGoal && folioDisplay.daysRemaining > 0 && (
                     <MetricRow label="Need / day"    value={`${fmt$(needPerDay)}/day`} highlight />
                   )}
                 </div>
