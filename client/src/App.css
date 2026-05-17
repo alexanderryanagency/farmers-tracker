@@ -682,9 +682,9 @@ html, body, #root {
 .pkpi-value.neutral { color: var(--muted); }
 .pkpi-goal { font-size: 12px; color: var(--muted); }
 
-.activity-content { flex: 1; overflow: hidden; display: flex; }
+.activity-content { flex: 1; overflow: hidden; display: grid; grid-template-columns: minmax(360px, 0.92fr) minmax(360px, 1.08fr); }
 .tasks-col {
-  flex: 1; border-right: 1px solid var(--border);
+  min-width: 0; border-right: 1px solid var(--border);
   overflow-y: auto; padding: 16px;
   display: flex; flex-direction: column; gap: 8px;
   scrollbar-width: thin; scrollbar-color: var(--border) transparent;
@@ -746,10 +746,10 @@ html, body, #root {
   padding: 5px 8px; cursor: pointer; width: 60px; flex-shrink: 0; text-align: center;
 }
 .conv-select:focus { outline: none; border-color: var(--gold); }
-.daily-col { width: 300px; min-width: 300px; display: flex; flex-direction: column; overflow: hidden; }
+.daily-col { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: rgba(255,255,255,0.015); }
 .daily-field {
   flex: 1; display: flex; flex-direction: column;
-  padding: 14px; border-bottom: 1px solid var(--border); overflow: hidden;
+  padding: 18px 20px; border-bottom: 1px solid var(--border); overflow: hidden;
 }
 .daily-field:last-child { border-bottom: none; }
 .daily-field-label {
@@ -761,7 +761,7 @@ html, body, #root {
 .daily-field-label.challenge-label { color: #fb923c; border-bottom-color: rgba(251,146,60,0.2); }
 .daily-textarea {
   flex: 1; resize: none; background: transparent; border: none;
-  font-family: inherit; font-size: 12px; line-height: 1.6; color: var(--text); min-height: 40px;
+  font-family: inherit; font-size: 15px; line-height: 1.7; color: var(--text); min-height: 80px;
 }
 .daily-textarea:focus { outline: none; }
 .daily-textarea::placeholder { color: var(--muted); font-size: 11px; }
@@ -1133,15 +1133,16 @@ html, body, #root {
   display: flex; align-items: center; gap: 7px;
 }
 .prem-lane-photo {
-  width: 30px; height: 30px; border-radius: 50%;
-  object-fit: cover; border: 2px solid var(--border); flex-shrink: 0;
+  width: 30px; height: 34px; border-radius: 0;
+  object-fit: contain; border: 0; flex-shrink: 0;
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,0.24));
 }
 .prem-lane-name { font-size: 18px; font-weight: 800; color: var(--text); white-space: nowrap; flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .prem-lane-track-wrap {
-  flex: 1; position: relative; height: 90px; display: flex; align-items: center;
+  flex: 1; position: relative; height: 112px; display: flex; align-items: center;
 }
 .prem-lane-track-bg {
-  width: 100%; height: 80px;
+  width: 100%; height: 50px;
   background: var(--track-bg); border: 1px solid var(--border);
   border-radius: 40px; position: relative; overflow: hidden;
 }
@@ -1176,11 +1177,37 @@ html, body, #root {
   transform: translate(-50%, -50%);
   transition: left 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 4;
+  width: 92px; height: 108px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
 }
-.prem-lane-car-photo {
-  width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
-  border: 3px solid; display: block;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.45);
+.prem-car-bobble {
+  width: 96px; height: 96px;
+  object-fit: contain; object-position: center bottom;
+  filter: drop-shadow(0 8px 10px rgba(0,0,0,0.34));
+  margin-bottom: -34px;
+  transform-origin: 50% 84%;
+  animation: bobbleDrive 2.1s ease-in-out infinite;
+}
+.prem-car-body {
+  position: relative; width: 52px; height: 22px;
+  border-radius: 16px 17px 9px 9px;
+  box-shadow: 0 5px 12px rgba(0,0,0,0.28), inset 0 -6px 0 rgba(0,0,0,0.14);
+}
+.prem-car-body::before {
+  content: ""; position: absolute; left: 8px; top: 8px;
+  width: 10px; height: 5px; border-radius: 6px;
+  background: rgba(255,255,255,0.72);
+}
+.prem-car-wheel {
+  position: absolute; bottom: -6px; width: 12px; height: 12px; border-radius: 50%;
+  background: #111827; border: 2px solid #D9DEE8;
+  box-shadow: inset 0 0 0 2px #5B6477;
+}
+.prem-car-wheel.left { left: 9px; }
+.prem-car-wheel.right { right: 9px; }
+@keyframes bobbleDrive {
+  0%, 100% { transform: translateY(0) rotate(-2deg) scale(1.04); }
+  50% { transform: translateY(-3px) rotate(2deg) scale(1.06); }
 }
 .prem-lane-flag { font-size: 22px; flex-shrink: 0; line-height: 1; }
 .prem-lane-pts-col {
@@ -1240,10 +1267,14 @@ html, body, #root {
   display: flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap;
 }
-.mini-race-person img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-.mini-race-track-wrap { flex: 1; position: relative; height: 50px; }
+.mini-race-person img {
+  width: 30px; height: 34px; border-radius: 0;
+  object-fit: contain; border: 0; flex-shrink: 0;
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,0.24));
+}
+.mini-race-track-wrap { flex: 1; position: relative; height: 74px; }
 .mini-race-track-bg {
-  width: 100%; height: 38px;
+  width: 100%; height: 24px;
   background: var(--track-bg); border: 1px solid var(--border);
   border-radius: 19px; overflow: hidden;
   position: absolute; top: 50%; transform: translateY(-50%);
@@ -1258,7 +1289,34 @@ html, body, #root {
   transform: translate(-50%, -50%);
   transition: left 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 2;
+  width: 78px; height: 88px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
 }
+.mini-car-bobble {
+  width: 82px; height: 82px;
+  object-fit: contain; object-position: center bottom;
+  filter: drop-shadow(0 7px 9px rgba(0,0,0,0.32));
+  margin-bottom: -28px;
+  transform-origin: 50% 84%;
+  animation: bobbleDrive 2.1s ease-in-out infinite;
+}
+.mini-car-body {
+  position: relative; width: 40px; height: 18px;
+  border-radius: 12px 13px 7px 7px;
+  box-shadow: 0 4px 9px rgba(0,0,0,0.26), inset 0 -5px 0 rgba(0,0,0,0.14);
+}
+.mini-car-body::before {
+  content: ""; position: absolute; left: 6px; top: 6px;
+  width: 7px; height: 4px; border-radius: 5px;
+  background: rgba(255,255,255,0.72);
+}
+.mini-car-wheel {
+  position: absolute; bottom: -5px; width: 10px; height: 10px; border-radius: 50%;
+  background: #111827; border: 2px solid #D9DEE8;
+  box-shadow: inset 0 0 0 2px #5B6477;
+}
+.mini-car-wheel.left { left: 7px; }
+.mini-car-wheel.right { right: 7px; }
 .mini-race-pts {
   width: 70px; text-align: right; flex-shrink: 0;
   font-size: 13px; font-weight: 800;
@@ -1375,12 +1433,23 @@ html, body, #root {
   .command-page { padding: 16px 14px 20px; }
   .prem-race-pct-header { display: none; }
   .prem-lane-info { width: 90px; }
+  .prem-lane-name { font-size: 14px; }
+  .prem-lane-track-wrap { height: 96px; }
+  .prem-lane-track-bg { height: 44px; }
+  .prem-lane-car { width: 74px; height: 92px; }
+  .prem-car-bobble { width: 78px; height: 78px; margin-bottom: -28px; }
+  .prem-car-body { width: 46px; height: 20px; }
+  .prem-car-wheel { width: 12px; height: 12px; bottom: -6px; border-width: 2px; }
   .prem-lane-pts-col { width: 70px; }
 
   /* Activity Tracker */
-  .activity-content { flex-direction: column; overflow-y: auto; }
+  .activity-content { display: flex; flex-direction: column; overflow-y: auto; }
   .tasks-col { border-right: none; border-bottom: 1px solid var(--border); max-height: unset; overflow-y: visible; }
   .daily-col { width: 100%; min-width: unset; min-height: 280px; }
+  .mini-race-track-wrap { height: 68px; }
+  .mini-race-car { width: 68px; height: 80px; }
+  .mini-car-bobble { width: 68px; height: 68px; margin-bottom: -24px; }
+  .mini-car-body { width: 38px; height: 17px; }
   .producer-kpi-strip { grid-template-columns: repeat(2, 1fr); }
   .pkpi-card { border-bottom: 1px solid var(--border); }
 

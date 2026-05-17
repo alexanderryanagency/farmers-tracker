@@ -44,7 +44,7 @@ function MiniRaceTrack({ weekData, allPeople }) {
         return (
           <div key={person.id} className="mini-race-lane">
             <div className="mini-race-person">
-              <img src={person.photo} alt={person.name} style={{ border: `1.5px solid ${color}` }} />
+              <img src={person.racePhoto || person.photo} alt={person.name} />
               {person.name}
             </div>
             <div className="mini-race-track-wrap">
@@ -52,11 +52,11 @@ function MiniRaceTrack({ weekData, allPeople }) {
                 <div className="mini-race-fill" style={{ width: `${pct * 100}%`, background: color, opacity: 0.3 }} />
               </div>
               <div className="mini-race-car" style={{ left: `${carLeft}%` }}>
-                <img
-                  src={person.photo}
-                  alt=""
-                  style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${color}`, display: 'block', boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
-                />
+                <img src={person.racePhoto || person.photo} alt="" className="mini-car-bobble" />
+                <div className="mini-car-body" style={{ background: color }}>
+                  <div className="mini-car-wheel left" />
+                  <div className="mini-car-wheel right" />
+                </div>
               </div>
             </div>
             <div className="mini-race-pts" style={{ color }}>

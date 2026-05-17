@@ -66,7 +66,6 @@ export default function CommandCenter({ weekData, kpiData, people }) {
 
   // ── Premium race track data ──
   const producers = people.filter(p => p.role === 'Producer');
-  const dan = people.find(p => p.id === 'dan');
 
   const producerLanes = producers
     .map(p => {
@@ -74,11 +73,6 @@ export default function CommandCenter({ weekData, kpiData, people }) {
       return { ...p, pData: d };
     })
     .sort((a, b) => (b.pData?.totalPremium || 0) - (a.pData?.totalPremium || 0));
-
-  const lanes = [
-    ...producerLanes,
-    ...(dan ? [{ ...dan, pData: null }] : []),
-  ];
 
   const MARKERS = [
     { pct: 25, label: '$7.5k' },
@@ -122,7 +116,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
             </div>
           </div>
 
-          {lanes.map(lane => {
+          {producerLanes.map(lane => {
             const isProducer = lane.role === 'Producer';
             const d = lane.pData;
             const premium = d?.totalPremium || 0;
@@ -137,7 +131,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
             return (
               <div key={lane.id} className="prem-race-lane">
                 <div className="prem-lane-info">
-                  <img src={lane.photo} alt={lane.name} className="prem-lane-photo" style={{ borderColor: color }} />
+                  <img src={lane.racePhoto || lane.photo} alt={lane.name} className="prem-lane-photo" />
                   <span className="prem-lane-name">{lane.name}</span>
                 </div>
 
@@ -154,7 +148,11 @@ export default function CommandCenter({ weekData, kpiData, people }) {
                   </div>
                   {isProducer && (
                     <div className="prem-lane-car" style={{ left: `${carLeft}%` }}>
-                      <img src={lane.photo} alt={lane.name} className="prem-lane-car-photo" style={{ borderColor: color }} />
+                      <img src={lane.racePhoto || lane.photo} alt="" className="prem-car-bobble" />
+                      <div className="prem-car-body" style={{ background: color }}>
+                        <div className="prem-car-wheel left" />
+                        <div className="prem-car-wheel right" />
+                      </div>
                     </div>
                   )}
                 </div>

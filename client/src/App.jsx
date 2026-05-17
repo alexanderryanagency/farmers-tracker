@@ -41,9 +41,9 @@ function MobileNav({ activeTab, onNavigate }) {
 const socket = io();
 
 const PEOPLE = [
-  { id: 'jayce',  name: 'Jayce',  role: 'Producer', photo: '/jayce.png'  },
-  { id: 'alissa', name: 'Alissa', role: 'Producer', photo: '/alissa.png' },
-  { id: 'dan',    name: 'Dan',    role: 'CSR',      photo: '/dan.png'    },
+  { id: 'jayce',  name: 'Jayce',  role: 'Producer', photo: '/jayce.png',  racePhoto: '/race-jayce.png'  },
+  { id: 'alissa', name: 'Alissa', role: 'Producer', photo: '/alissa.png', racePhoto: '/race-alissa.png' },
+  { id: 'dan',    name: 'Dan',    role: 'CSR',      photo: '/dan.png',    racePhoto: '/race-dan.png'    },
 ];
 
 export default function App() {
