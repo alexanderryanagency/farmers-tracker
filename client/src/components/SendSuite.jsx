@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Zap, FileText, Mail, MessageCircle, Copy, Edit2, Check, Send, X } from 'lucide-react';
 
-const PRODUCTS = ['Auto Only', 'Home Only', 'Auto + Home Bundle', 'Life', 'Bundle + Life'];
 const TONES    = ['Warm & Friendly', 'Professional', 'Direct'];
 
 // ── Toast system ──────────────────────────────────────────────────────────────
@@ -122,7 +121,7 @@ export default function SendSuite({ people, currentUser }) {
   // Client search state
   const [clientName,    setClientName]    = useState('');
   const [clientEmail,   setClientEmail]   = useState('');
-  const [selectedLead,  setSelectedLead]  = useState(null);  // { id, customerName, customerPhone }
+  const [selectedLead,  setSelectedLead]  = useState(null);  // { id, fullName, firstName, lastName, email, phone }
   const [searchResults, setSearchResults] = useState([]);
   const [searching,     setSearching]     = useState(false);
   const [showDropdown,  setShowDropdown]  = useState(false);
@@ -130,9 +129,6 @@ export default function SendSuite({ people, currentUser }) {
   const dropdownRef    = useRef(null);
 
   // Form state
-  const [product,     setProduct]     = useState(PRODUCTS[2]);
-  const [autoPremium, setAutoPremium] = useState('');
-  const [homePremium, setHomePremium] = useState('');
   const [notes,       setNotes]       = useState('');
   const [tone,        setTone]        = useState(TONES[0]);
 
@@ -148,9 +144,6 @@ export default function SendSuite({ people, currentUser }) {
   const [textSent,     setTextSent]     = useState(false);
 
   const { toasts, addToast } = useToasts();
-
-  const hasAuto = ['Auto Only', 'Auto + Home Bundle', 'Bundle + Life'].includes(product);
-  const hasHome = ['Home Only', 'Auto + Home Bundle', 'Bundle + Life'].includes(product);
 
   const firstName = clientName.trim().split(' ')[0];
 
@@ -173,6 +166,7 @@ export default function SendSuite({ people, currentUser }) {
   function handleClientNameChange(e) {
     const val = e.target.value;
     setClientName(val);
+    if (selectedLead) setClientEmail('');
     setSelectedLead(null);
     clearTimeout(searchTimerRef.current);
     if (val.trim().length < 3) {
@@ -185,7 +179,7 @@ export default function SendSuite({ people, currentUser }) {
       try {
         const res = await fetch(`/api/az/leads?search=${encodeURIComponent(val.trim())}`);
         const data = await res.json();
-        setSearchResults(Array.isArray(data) ? data : []);
+        setSearchResults(Array.isArray(data) ? data.map(normalizeLead).filter(lead => lead.fullName) : []);
         setShowDropdown(true);
       } catch (err) {
         console.error('Lead search error:', err);
@@ -195,9 +189,24 @@ export default function SendSuite({ people, currentUser }) {
     }, 350);
   }
 
+  function normalizeLead(lead) {
+    const firstName = lead.firstName || lead.firstname || lead.first_name || '';
+    const lastName  = lead.lastName  || lead.lastname  || lead.last_name  || '';
+    return {
+      id:        lead.id,
+      fullName:  lead.fullName || lead.customerName || `${firstName} ${lastName}`.trim(),
+      firstName,
+      lastName,
+      email:     lead.email || lead.primaryEmail || '',
+      phone:     lead.phone || lead.customerPhone || lead.mobile_phone || '',
+    };
+  }
+
   function selectLead(lead) {
-    setSelectedLead(lead);
-    setClientName(lead.customerName);
+    const normalizedLead = normalizeLead(lead);
+    setSelectedLead(normalizedLead);
+    setClientName(normalizedLead.fullName);
+    setClientEmail(normalizedLead.email || '');
     setShowDropdown(false);
     setSearchResults([]);
   }
@@ -205,6 +214,7 @@ export default function SendSuite({ people, currentUser }) {
   function clearLead() {
     setSelectedLead(null);
     setClientName('');
+    setClientEmail('');
     setSearchResults([]);
     setShowDropdown(false);
   }
@@ -223,9 +233,6 @@ export default function SendSuite({ people, currentUser }) {
           producer:    producerName,
           clientName:  firstName,
           clientEmail,
-          product,
-          autoPremium: hasAuto ? autoPremium : '',
-          homePremium: hasHome ? homePremium : '',
           notes,
           tone,
         }),
@@ -397,7 +404,7 @@ export default function SendSuite({ people, currentUser }) {
             </div>
             {selectedLead && (
               <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 4 }}>
-                ✓ Linked: {selectedLead.customerName}{selectedLead.customerPhone ? ` · ${selectedLead.customerPhone}` : ''}
+                ✓ Linked: {selectedLead.fullName}{selectedLead.email || selectedLead.phone ? ` · ${selectedLead.email || selectedLead.phone}` : ''}
               </div>
             )}
             {searching && (
@@ -407,8 +414,8 @@ export default function SendSuite({ people, currentUser }) {
               <div className="lead-search-dropdown">
                 {searchResults.map(lead => (
                   <button key={lead.id} className="lead-result-item" onMouseDown={() => selectLead(lead)}>
-                    <span className="lead-result-name">{lead.customerName}</span>
-                    {lead.customerPhone && <span className="lead-result-phone">{lead.customerPhone}</span>}
+                    <span className="lead-result-name">{lead.fullName}</span>
+                    {(lead.email || lead.phone) && <span className="lead-result-phone">{lead.email || lead.phone}</span>}
                   </button>
                 ))}
               </div>
@@ -421,51 +428,16 @@ export default function SendSuite({ people, currentUser }) {
           </div>
 
 
-          <div className="form-group">
-            <label className="form-label">Client Email <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
-            <input
-              className="form-input"
-              type="email"
-              placeholder="client@email.com"
-              value={clientEmail}
-              onChange={e => setClientEmail(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Product Discussed</label>
-            <select className="form-select" value={product} onChange={e => setProduct(e.target.value)}>
-              {PRODUCTS.map(p => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-
-          {hasAuto && (
+          {!selectedLead && (
             <div className="form-group">
-              <label className="form-label">Auto Premium ($)</label>
+              <label className="form-label">Client Email <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
               <input
                 className="form-input"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="e.g. 142"
-                value={autoPremium}
-                onChange={e => setAutoPremium(e.target.value)}
-              />
-            </div>
-          )}
-
-          {hasHome && (
-            <div className="form-group">
-              <label className="form-label">Home Premium ($)</label>
-              <input
-                className="form-input"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="e.g. 1450"
-                value={homePremium}
-                onChange={e => setHomePremium(e.target.value)}
+                type="email"
+                placeholder="client@email.com"
+                value={clientEmail}
+                onChange={e => setClientEmail(e.target.value)}
+                autoComplete="off"
               />
             </div>
           )}

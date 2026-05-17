@@ -468,29 +468,45 @@ app.get('/api/az/leads', async (req, res) => {
   console.log('[AZ leads] searching for:', search);
   try {
     if (!cachedJWT) await azLogin();
-    const searchUrl = 'https://app.agencyzoom.com/v1/api/leads/search';
-    console.log('[AZ leads] POST', searchUrl, 'body:', JSON.stringify({ name: search, pageSize: 10, page: 0 }));
+    const searchUrl = 'https://app.agencyzoom.com/v1/api/leads/list';
+    const searchBody = { customerName: search, pageSize: 10, page: 0 };
+    console.log('[AZ leads] POST', searchUrl, 'body:', JSON.stringify(searchBody));
     const response = await fetch(searchUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${cachedJWT}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name: search, pageSize: 10, page: 0 }),
+      body: JSON.stringify(searchBody),
     });
     const text = await response.text();
-    console.log('[AZ leads] status:', response.status, 'body:', text.slice(0, 300));
+    const contentType = response.headers.get('content-type') || 'unknown';
+    if (!response.ok) {
+      console.error('[AZ leads] failed response:', {
+        status: response.status,
+        contentType,
+        bodyPreview: text.slice(0, 500),
+      });
+    } else {
+      console.log('[AZ leads] status:', response.status, 'content-type:', contentType);
+    }
     if (response.status === 401) {
       cachedJWT = null;
       return res.status(500).json({ error: 'AZ session expired — try again' });
+    }
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `AZ lead search failed with status ${response.status}` });
     }
     let data = {};
     try { data = JSON.parse(text); } catch {}
     const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || data.content || []);
     const leads = raw.map(l => ({
-      id:            l.id,
-      customerName:  l.customerName  || `${l.first_name || ''} ${l.last_name || ''}`.trim(),
-      customerPhone: l.customerPhone || l.phone || l.mobile_phone || '',
+      id:        l.id,
+      fullName:  l.customerName || `${l.firstname || l.first_name || ''} ${l.lastname || l.last_name || ''}`.trim(),
+      firstName: l.firstname || l.first_name || '',
+      lastName:  l.lastname || l.last_name || '',
+      email:     l.email || l.primaryEmail || '',
+      phone:     l.phone || l.customerPhone || l.mobile_phone || '',
     }));
     console.log('[AZ leads] mapped', leads.length, 'leads');
     res.json(leads);
