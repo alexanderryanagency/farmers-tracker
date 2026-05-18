@@ -16,6 +16,7 @@ let state = {
   saleDetails: {},
   conversations: [],
   coachingNotes: [],
+  pulseSchedule: {},
 };
 
 if (fs.existsSync(FILE)) {
@@ -25,6 +26,7 @@ if (fs.existsSync(FILE)) {
     if (!state.coachingNotes) state.coachingNotes = [];
     if (!state.conversations) state.conversations = [];
     if (!state.feedback) state.feedback = {};
+    if (!state.pulseSchedule) state.pulseSchedule = {};
   } catch {}
 }
 
@@ -161,6 +163,15 @@ module.exports = {
     state.coachingNotes.splice(idx, 1);
     save();
     return true;
+  },
+
+  getScheduledPulseDate(type) {
+    return state.pulseSchedule?.[type] || null;
+  },
+  setScheduledPulseDate(type, date) {
+    if (!state.pulseSchedule) state.pulseSchedule = {};
+    state.pulseSchedule[type] = date;
+    save();
   },
 
   setHabit() {},

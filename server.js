@@ -418,6 +418,107 @@ function buildPulse(type, date = getLocalDateString()) {
   };
 }
 
+async function sendPulseEmail(type, date = getLocalDateString()) {
+  const pulse = buildPulse(type, date);
+
+  // TODO: Replace the existing Zapier email webhook with a dedicated pulse sender
+  // if Alexander wants scheduled delivery outside Zapier/manual test sends.
+  const webhookRes = await fetch(ZAPIER_PULSE_EMAIL_WEBHOOK, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientName: 'Alexander',
+      clientEmail: ALEXANDER_EMAIL,
+      producer: 'Agency Pulse',
+      producerEmail: ALEXANDER_EMAIL,
+      emailSubject: pulse.subject,
+      emailBody: pulse.html,
+      pulseType: pulse.type,
+      pulseDate: pulse.date,
+    }),
+  });
+  const webhookBody = await webhookRes.text();
+  const zapier = {
+    status: webhookRes.status,
+    ok: webhookRes.ok,
+    contentType: webhookRes.headers.get('content-type') || 'unknown',
+    bodyPreview: webhookBody.slice(0, 500),
+  };
+
+  if (!webhookRes.ok) {
+    const err = new Error('Pulse email webhook failed');
+    err.statusCode = 502;
+    err.pulse = pulse;
+    err.zapier = zapier;
+    throw err;
+  }
+
+  return {
+    ok: true,
+    sentTo: ALEXANDER_EMAIL,
+    subject: pulse.subject,
+    zapier,
+    pulse,
+  };
+}
+
+const scheduledPulseSends = {
+  midday: null,
+  eod: null,
+};
+
+function getDenverTimeParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return {
+    dateKey: `${values.year}-${values.month}-${values.day}`,
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+  };
+}
+
+async function runScheduledPulse(type, dateKey) {
+  const lastSentDate = scheduledPulseSends[type] || store.getScheduledPulseDate(type);
+  if (lastSentDate === dateKey) {
+    console.log(`[Pulse scheduler] ${type} skipped for ${dateKey}: already sent`);
+    return;
+  }
+
+  scheduledPulseSends[type] = dateKey;
+  try {
+    const result = await sendPulseEmail(type, dateKey);
+    store.setScheduledPulseDate(type, dateKey);
+    console.log(`[Pulse scheduler] ${type} pulse sent for ${dateKey}: ${result.subject}`);
+  } catch (err) {
+    scheduledPulseSends[type] = null;
+    console.error(`[Pulse scheduler] ${type} pulse failed for ${dateKey}:`, err.message);
+  }
+}
+
+function checkPulseSchedule(now = new Date()) {
+  const { dateKey, hour, minute } = getDenverTimeParts(now);
+  if (hour === 12 && minute === 0) {
+    runScheduledPulse('midday', dateKey);
+  }
+  if (hour === 17 && minute === 30) {
+    runScheduledPulse('eod', dateKey);
+  }
+}
+
+function startPulseScheduler() {
+  console.log('[Pulse scheduler] initialized for America/Denver: midday 12:00, eod 17:30');
+  checkPulseSchedule();
+  setInterval(checkPulseSchedule, 30 * 1000);
+}
+
 function producerNameToId(name) {
   const normalized = String(name || '').trim().toLowerCase();
   return Object.keys(PERSON_NAMES).find(id => PERSON_NAMES[id].toLowerCase() === normalized) || null;
@@ -1222,52 +1323,24 @@ app.post('/api/pulse/:type/send', async (req, res) => {
   if (!['midday', 'eod'].includes(type)) {
     return res.status(400).json({ error: 'Pulse type must be midday or eod' });
   }
-  const pulse = buildPulse(type, req.body?.date || req.query.date || getLocalDateString());
 
-  // TODO: Replace the existing Zapier email webhook with a dedicated pulse sender
-  // if Alexander wants scheduled delivery outside Zapier/manual test sends.
   try {
-    const webhookRes = await fetch(ZAPIER_PULSE_EMAIL_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientName: 'Alexander',
-        clientEmail: ALEXANDER_EMAIL,
-        producer: 'Agency Pulse',
-        producerEmail: ALEXANDER_EMAIL,
-        emailSubject: pulse.subject,
-        emailBody: pulse.html,
-        pulseType: pulse.type,
-        pulseDate: pulse.date,
-      }),
-    });
-    const webhookBody = await webhookRes.text();
-    const zapier = {
-      status: webhookRes.status,
-      ok: webhookRes.ok,
-      contentType: webhookRes.headers.get('content-type') || 'unknown',
-      bodyPreview: webhookBody.slice(0, 500),
-    };
-
-    if (!webhookRes.ok) {
-      return res.status(502).json({
-        ok: false,
-        error: 'Pulse email webhook failed',
-        sentTo: ALEXANDER_EMAIL,
-        subject: pulse.subject,
-        zapier,
-      });
-    }
-
+    const result = await sendPulseEmail(type, req.body?.date || req.query.date || getLocalDateString());
     res.json({
       ok: true,
-      sentTo: ALEXANDER_EMAIL,
-      subject: pulse.subject,
-      zapier,
+      sentTo: result.sentTo,
+      subject: result.subject,
+      zapier: result.zapier,
     });
   } catch (err) {
     console.error('pulse email webhook error:', err.message);
-    res.status(500).json({ error: err.message, pulse });
+    res.status(err.statusCode || 500).json({
+      ok: false,
+      error: err.message,
+      sentTo: ALEXANDER_EMAIL,
+      subject: err.pulse?.subject,
+      zapier: err.zapier,
+    });
   }
 });
 
@@ -1313,4 +1386,7 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => console.log(`🌾 Farmers Tracker running on http://localhost:${PORT}`));
+httpServer.listen(PORT, () => {
+  console.log(`🌾 Farmers Tracker running on http://localhost:${PORT}`);
+  startPulseScheduler();
+});
