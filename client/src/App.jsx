@@ -136,7 +136,7 @@ export default function App() {
       <main className="main-content">
         {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={PEOPLE} theme={theme} />}
         {activeTab === 'send'     && <SendSuite people={PEOPLE} currentUser={currentUser} />}
-        {activeTab === 'activity' && <ActivityTracker people={PEOPLE} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
+        {activeTab === 'activity' && <ActivityTracker people={PEOPLE} currentUser={currentUser} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
         {activeTab === 'stats'    && <MyStats kpiData={kpiData} people={PEOPLE} />}
         {activeTab === 'coach'    && <CoachsCorner people={PEOPLE} />}
         {activeTab === 'trophy'   && <TrophyCase weekData={weekData} kpiData={kpiData} people={PEOPLE} />}

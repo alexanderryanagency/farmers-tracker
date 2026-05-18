@@ -67,9 +67,19 @@ function MetaRow({ label, value, highlight }) {
   );
 }
 
-export default function MyStats() {
+export default function MyStats({ kpiData }) {
   const [producerId, setProducerId] = useState('jayce');
-  const data = ZERO_STATS[producerId];
+  const kpi = kpiData?.data?.[producerId];
+  const data = {
+    ...ZERO_STATS[producerId],
+    conversations: kpi?.totalConversations ?? ZERO_STATS[producerId].conversations,
+    closeRate: kpi?.closeRate ?? ZERO_STATS[producerId].closeRate,
+    polPerHH: kpi?.policiesPerHH ?? ZERO_STATS[producerId].polPerHH,
+    premium: kpi?.totalPremium ?? ZERO_STATS[producerId].premium,
+    households: kpi?.totalHouseholds ?? ZERO_STATS[producerId].households,
+    policies: kpi?.totalPolicies ?? ZERO_STATS[producerId].policies,
+    lifeApps: kpi?.totalLifeAppsBack ?? ZERO_STATS[producerId].lifeApps,
+  };
   const folioDisplay = getFolioDisplay(getActiveFolio());
 
   const premiumGood = data.premium >= GOALS.premium;

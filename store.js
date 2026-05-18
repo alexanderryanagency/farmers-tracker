@@ -9,10 +9,12 @@ let state = {
   notes: {},
   wins: {},
   challenges: {},
+  feedback: {},
   clients: {},
   log: [],
   salesDays: {},
   saleDetails: {},
+  conversations: [],
   coachingNotes: [],
 };
 
@@ -21,6 +23,8 @@ if (fs.existsSync(FILE)) {
     const loaded = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     state = { ...state, ...loaded };
     if (!state.coachingNotes) state.coachingNotes = [];
+    if (!state.conversations) state.conversations = [];
+    if (!state.feedback) state.feedback = {};
   } catch {}
 }
 
@@ -60,6 +64,14 @@ module.exports = {
   getLog() {
     return state.log;
   },
+  addConversation(entry) {
+    if (!state.conversations) state.conversations = [];
+    state.conversations.unshift({ ...entry, id: Date.now() + Math.random() });
+    save();
+  },
+  getConversations() {
+    return state.conversations || [];
+  },
   updateLogEntry(id, updates) {
     const entry = state.log.find(e => String(e.id) === String(id));
     if (!entry) return false;
@@ -91,6 +103,16 @@ module.exports = {
   },
   getChallenge(person, date) {
     return state.challenges[person]?.[date] || '';
+  },
+
+  setFeedback(person, date, content) {
+    if (!state.feedback) state.feedback = {};
+    if (!state.feedback[person]) state.feedback[person] = {};
+    state.feedback[person][date] = content;
+    save();
+  },
+  getFeedback(person, date) {
+    return state.feedback?.[person]?.[date] || '';
   },
 
   setSaleDetails(person, taskId, date, details) {

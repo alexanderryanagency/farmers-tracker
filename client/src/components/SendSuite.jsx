@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Zap, FileText, Mail, MessageCircle, Copy, Edit2, Check, Send, X } from 'lucide-react';
 
 const TONES    = ['Warm & Friendly', 'Professional', 'Direct'];
+const CARRIERS = ['Farmers', 'Bristol West'];
+const POLICY_TYPES_BY_CARRIER = {
+  Farmers: ['Home', 'Standard Auto', 'Life'],
+  'Bristol West': ['Standard Auto'],
+};
 
 // ── Toast system ──────────────────────────────────────────────────────────────
 
@@ -131,11 +136,14 @@ export default function SendSuite({ people, currentUser }) {
   // Form state
   const [notes,       setNotes]       = useState('');
   const [tone,        setTone]        = useState(TONES[0]);
+  const [quotePolicies, setQuotePolicies] = useState([]);
+  const [quotePdf, setQuotePdf] = useState(null);
 
   // Output state
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState(null);
   const [error,   setError]   = useState(null);
+  const [quoteExport, setQuoteExport] = useState(null);
 
   // AZ send state
   const [emailSending, setEmailSending] = useState(false);
@@ -146,6 +154,11 @@ export default function SendSuite({ people, currentUser }) {
   const { toasts, addToast } = useToasts();
 
   const firstName = clientName.trim().split(' ')[0];
+  const quotePolicyCount = quotePolicies.length;
+  const quoteTotalPremium = quotePolicies.reduce((sum, policy) => {
+    const amount = parseFloat(String(policy.premium || '').replace(/[$,\s]/g, ''));
+    return sum + (Number.isNaN(amount) ? 0 : amount);
+  }, 0);
 
   useEffect(() => {
     setEmailSent(false);
@@ -219,11 +232,50 @@ export default function SendSuite({ people, currentUser }) {
     setShowDropdown(false);
   }
 
+  function addQuotePolicy() {
+    const carrier = CARRIERS[0];
+    setQuotePolicies(policies => [
+      ...policies,
+      {
+        id: Date.now() + Math.random(),
+        carrier,
+        policyType: POLICY_TYPES_BY_CARRIER[carrier][0],
+        premium: '',
+      },
+    ]);
+  }
+
+  function updateQuotePolicy(id, updates) {
+    setQuotePolicies(policies => policies.map(policy => {
+      if (policy.id !== id) return policy;
+      const next = { ...policy, ...updates };
+      if (updates.carrier) {
+        next.policyType = POLICY_TYPES_BY_CARRIER[updates.carrier][0];
+      }
+      return next;
+    }));
+  }
+
+  function removeQuotePolicy(id) {
+    setQuotePolicies(policies => policies.filter(policy => policy.id !== id));
+  }
+
+  function handleQuotePdfUpload(e) {
+    const file = e.target.files?.[0] || null;
+    // TODO: AgencyZoom quote PDF/file upload endpoint still needs separate diagnostic.
+    setQuotePdf(file);
+  }
+
+  function formatMoney(value) {
+    return `$${(Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  }
+
   async function handleGenerate() {
     if (!clientName.trim()) return;
     setLoading(true);
     setError(null);
     setResult(null);
+    setQuoteExport(null);
 
     try {
       const res  = await fetch('/api/generate', {
@@ -232,7 +284,9 @@ export default function SendSuite({ people, currentUser }) {
         body: JSON.stringify({
           producer:    producerName,
           clientName:  firstName,
+          clientFullName: clientName.trim(),
           clientEmail,
+          leadId:      selectedLead?.id || null,
           notes,
           tone,
         }),
@@ -256,7 +310,7 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function postToAZ(leadId, data) {
-    const results = await Promise.allSettled([
+    const azRequests = [
       fetch(`/api/az/leads/${leadId}/notes`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -272,19 +326,50 @@ export default function SendSuite({ people, currentUser }) {
             body: JSON.stringify({ title: t.title, due_date: t.due_date }),
           }).then(r => r.json())
         ),
-    ]);
+    ];
+
+    if (quotePolicies.length > 0) {
+      azRequests.push(
+        fetch(`/api/az/leads/${leadId}/quotes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ policies: quotePolicies }),
+        }).then(r => r.json())
+      );
+    }
+
+    const results = await Promise.allSettled(azRequests);
 
     const noteOk = results[0].status === 'fulfilled' && !results[0].value?.error;
     noteOk
       ? addToast('✅ Notes posted to AgencyZoom')
       : addToast('⚠️ Notes failed to post — copy manually', 'error');
 
-    const taskResults = results.slice(1);
+    const quoteResultIndex = quotePolicies.length > 0 ? results.length - 1 : null;
+    const taskResults = quoteResultIndex == null ? results.slice(1) : results.slice(1, quoteResultIndex);
     if (taskResults.length > 0) {
       const allOk = taskResults.every(r => r.status === 'fulfilled' && !r.value?.error);
       allOk
         ? addToast('✅ Tasks created in AgencyZoom')
         : addToast('⚠️ Some tasks failed to create', 'error');
+    }
+
+    if (quoteResultIndex != null) {
+      const quoteResult = results[quoteResultIndex];
+      const value = quoteResult.status === 'fulfilled' ? quoteResult.value : { error: quoteResult.reason?.message || 'Quote export failed' };
+      setQuoteExport(value);
+      if (quoteResult.status === 'fulfilled' && !value.error && (value.created?.length || value.skipped?.length || value.failed?.length)) {
+        const skipped = value.skipped?.length || 0;
+        const failed = value.failed?.length || 0;
+        const created = value.created?.length || 0;
+        if (failed > 0) {
+          addToast(`⚠️ Quotes: ${created} created, ${skipped} skipped, ${failed} failed`, 'error');
+        } else {
+          addToast(`✅ Quotes: ${created} created${skipped ? `, ${skipped} skipped` : ''}`);
+        }
+      } else {
+        addToast(`⚠️ Quote export failed: ${value.error || 'Unknown error'}`, 'error');
+      }
     }
   }
 
@@ -445,8 +530,93 @@ export default function SendSuite({ people, currentUser }) {
             </div>
           )}
 
+          <div className="quote-builder">
+            <div className="quote-builder-header">
+              <div>
+                <div className="quote-builder-title">Quote Builder</div>
+                <div className="quote-builder-subtitle">Creates AgencyZoom quote rows for confirmed products</div>
+              </div>
+              <button type="button" className="quote-add-btn" onClick={addQuotePolicy}>
+                + Add Policy
+              </button>
+            </div>
+
+            <div className="quote-builder-helper">
+              Coming soon — AgencyZoom product ID not confirmed yet: Foremost, Farmers Renters, and Farmers Second Home.
+            </div>
+
+            {quotePolicies.length === 0 ? (
+              <div className="quote-empty">No quoted policies added yet.</div>
+            ) : (
+              <div className="quote-policy-list">
+                {quotePolicies.map(policy => (
+                  <div className="quote-policy-card" key={policy.id}>
+                    <div className="quote-policy-grid">
+                      <div className="quote-field">
+                        <label className="quote-field-label">Carrier</label>
+                        <select
+                          className="form-select"
+                          value={policy.carrier}
+                          onChange={e => updateQuotePolicy(policy.id, { carrier: e.target.value })}
+                        >
+                          {CARRIERS.map(carrier => <option key={carrier} value={carrier}>{carrier}</option>)}
+                        </select>
+                      </div>
+                      <div className="quote-field">
+                        <label className="quote-field-label">Policy Type</label>
+                        <select
+                          className="form-select"
+                          value={policy.policyType}
+                          onChange={e => updateQuotePolicy(policy.id, { policyType: e.target.value })}
+                        >
+                          {POLICY_TYPES_BY_CARRIER[policy.carrier].map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                      <div className="quote-field">
+                        <label className="quote-field-label">Premium ($)</label>
+                        <input
+                          className="form-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                          value={policy.premium}
+                          onChange={e => updateQuotePolicy(policy.id, { premium: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <button type="button" className="quote-remove-btn" onClick={() => removeQuotePolicy(policy.id)}>
+                      Remove policy
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="quote-summary">
+              <div>
+                <span>Total Quoted Premium</span>
+                <strong>{formatMoney(quoteTotalPremium)}</strong>
+              </div>
+              <div>
+                <span>Policy Count</span>
+                <strong>{quotePolicyCount}</strong>
+              </div>
+            </div>
+
+            <div className="quote-pdf-field">
+              <label className="quote-field-label">Upload Quote PDF</label>
+              <input className="form-input" type="file" accept="application/pdf,.pdf" onChange={handleQuotePdfUpload} />
+              {quotePdf?.name && <div className="quote-pdf-name">{quotePdf.name}</div>}
+              <div className="quote-builder-helper">PDF upload to AgencyZoom is not connected yet.</div>
+            </div>
+          </div>
+
           <div className="form-group">
-            <label className="form-label">Key Notes from Call</label>
+            <label className="form-label">Krisp Notes From Call</label>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, marginBottom: 8 }}>
+              Paste the full Krisp notes from the call. This powers CRM notes, activity tracking, and future coaching.
+            </div>
             <textarea
               className="form-textarea"
               placeholder="Paste Krisp notes here…"
@@ -502,6 +672,24 @@ export default function SendSuite({ people, currentUser }) {
 
           {result && !loading && (
             <>
+              {quoteExport && (
+                <div className={`quote-export-status${quoteExport.failed?.length ? ' has-errors' : ''}`}>
+                  <div className="quote-export-title">AgencyZoom Quote Export</div>
+                  {quoteExport.error ? (
+                    <div className="quote-export-line error">{quoteExport.error}</div>
+                  ) : (
+                    <>
+                      <div className="quote-export-line">{quoteExport.created?.length || 0} quotes created</div>
+                      {(quoteExport.skipped?.length || 0) > 0 && (
+                        <div className="quote-export-line">{quoteExport.skipped.length} skipped: {quoteExport.skipped.map(p => `${p.carrier} ${p.policyType}`).join(', ')}</div>
+                      )}
+                      {(quoteExport.failed?.length || 0) > 0 && (
+                        <div className="quote-export-line error">{quoteExport.failed.length} failed: {quoteExport.failed.map(p => `${p.carrier} ${p.policyType}`).join(', ')}</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {result.az_notes && (
                 <OutputCard
                   title="AgencyZoom Notes"
