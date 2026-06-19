@@ -2,7 +2,7 @@ import { getActiveFolio, getFolioDisplay } from '../utils/folio';
 
 const PREMIUM_GOAL    = 30000;
 
-const CAR_COLORS = { jayce: '#FFB800', alissa: '#CC0000', dan: '#8B9BC1' };
+const CAR_COLORS = { alissa: '#CC0000', dan: '#8B9BC1' };
 
 function fmt$(n) {
   if (!n && n !== 0) return '$0';

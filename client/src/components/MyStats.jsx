@@ -11,20 +11,6 @@ const GOALS = {
 };
 
 const ZERO_STATS = {
-  jayce: {
-    conversations: 0,
-    closeRate: 0,
-    polPerHH: 0,
-    premium: 0,
-    households: 0,
-    policies: 0,
-    lifeApps: 0,
-    referralsClosed: 0,
-    referralsQuoted: 0,
-    dials: 0,
-    talkTime: '0h 0m',
-    talkTimeAvg: '0h 0m',
-  },
   alissa: {
     conversations: 0,
     closeRate: 0,
@@ -40,11 +26,6 @@ const ZERO_STATS = {
     talkTimeAvg: '0h 0m',
   },
 };
-
-const PRODUCERS = [
-  { id: 'jayce',  name: 'Jayce',  photo: '/jayce.png'  },
-  { id: 'alissa', name: 'Alissa', photo: '/alissa.png' },
-];
 
 function trendFor(current) { return current; }
 function stillNeedPerDay(goal, current) {
@@ -67,18 +48,22 @@ function MetaRow({ label, value, highlight }) {
   );
 }
 
-export default function MyStats({ kpiData }) {
-  const [producerId, setProducerId] = useState('jayce');
+export default function MyStats({ kpiData, people = [] }) {
+  const producers = people.filter(p => p.role === 'Producer');
+  const defaultProducerId = producers[0]?.id || 'alissa';
+  const [producerId, setProducerId] = useState(defaultProducerId);
   const kpi = kpiData?.data?.[producerId];
+  const fallbackStats = ZERO_STATS[producerId] || ZERO_STATS[defaultProducerId];
+  if (!fallbackStats) return null;
   const data = {
-    ...ZERO_STATS[producerId],
-    conversations: kpi?.totalConversations ?? ZERO_STATS[producerId].conversations,
-    closeRate: kpi?.closeRate ?? ZERO_STATS[producerId].closeRate,
-    polPerHH: kpi?.policiesPerHH ?? ZERO_STATS[producerId].polPerHH,
-    premium: kpi?.totalPremium ?? ZERO_STATS[producerId].premium,
-    households: kpi?.totalHouseholds ?? ZERO_STATS[producerId].households,
-    policies: kpi?.totalPolicies ?? ZERO_STATS[producerId].policies,
-    lifeApps: kpi?.totalLifeAppsBack ?? ZERO_STATS[producerId].lifeApps,
+    ...fallbackStats,
+    conversations: kpi?.totalConversations ?? fallbackStats.conversations,
+    closeRate: kpi?.closeRate ?? fallbackStats.closeRate,
+    polPerHH: kpi?.policiesPerHH ?? fallbackStats.polPerHH,
+    premium: kpi?.totalPremium ?? fallbackStats.premium,
+    households: kpi?.totalHouseholds ?? fallbackStats.households,
+    policies: kpi?.totalPolicies ?? fallbackStats.policies,
+    lifeApps: kpi?.totalLifeAppsBack ?? fallbackStats.lifeApps,
   };
   const folioDisplay = getFolioDisplay(getActiveFolio());
 
@@ -95,7 +80,7 @@ export default function MyStats({ kpiData }) {
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* Photo tab bar */}
       <div className="photo-tab-bar">
-        {PRODUCERS.map(p => (
+        {producers.map(p => (
           <button
             key={p.id}
             className={`photo-tab-btn${producerId === p.id ? ' active' : ''}`}

@@ -139,8 +139,10 @@ export default function TrophyCase({ weekData, kpiData, people }) {
 
   // Max premium across producers (for Top Producer badge)
   const maxPremium = Math.max(
-    kpiData?.data?.jayce?.totalPremium || 0,
-    kpiData?.data?.alissa?.totalPremium || 0,
+    0,
+    ...people
+      .filter(p => p.role === 'Producer')
+      .map(p => kpiData?.data?.[p.id]?.totalPremium || 0),
   );
 
   // Compute badges per person

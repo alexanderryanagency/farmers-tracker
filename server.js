@@ -14,6 +14,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
@@ -29,6 +30,8 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const AZ_BASE_URL = 'https://app.agencyzoom.com/v1/api';
 
 let cachedJWT = null;
+const recentAzWrites = new Map();
+const AZ_WRITE_DEDUPE_MS = 5 * 60 * 1000;
 
 async function azLogin() {
   const response = await fetch('https://app.agencyzoom.com/v1/api/auth/login', {
@@ -167,7 +170,151 @@ function getTaskPoints(taskId, done) {
 }
 
 const PERSON_NAMES = { jayce: 'Jayce', alissa: 'Alissa', dan: 'Dan' };
-const PERSONS = ['jayce', 'alissa', 'dan'];
+const ACTIVE_PERSONS = ['alissa', 'dan'];
+const PERSONS = ACTIVE_PERSONS;
+const ACTIVE_TEAM_MEMBERS = {
+  alissa: {
+    id: 'alissa',
+    name: 'Alissa',
+    email: 'alissa@alexanderryanagency.com',
+    azEmployeeId: 158217,
+    azUserId: 169609,
+    activeAppPerson: true,
+  },
+  dan: {
+    id: 'dan',
+    name: 'Dan',
+    email: 'dan@alexanderryanagency.com',
+    azEmployeeId: 164526,
+    azUserId: 176427,
+    activeAppPerson: true,
+  },
+  arb: {
+    id: 'arb',
+    name: 'Alexander (ARB)',
+    email: ALEXANDER_EMAIL,
+    azEmployeeId: 158064,
+    activeAppPerson: false,
+  },
+};
+const ACTIVE_TEAM_ALIASES = new Map([
+  ['alissa', 'alissa'],
+  ['alissa@alexanderryanagency.com', 'alissa'],
+  ['dan', 'dan'],
+  ['dan@alexanderryanagency.com', 'dan'],
+  ['alex', 'arb'],
+  ['alexander', 'arb'],
+  ['alexander (arb)', 'arb'],
+  ['arb', 'arb'],
+  ['arb@alexanderryanagency.com', 'arb'],
+]);
+const INACTIVE_PRODUCERS = new Set(['jayce', 'jayce@alexanderryanagency.com']);
+
+function isActivePerson(person) {
+  return ACTIVE_PERSONS.includes(person);
+}
+
+function isInactiveProducer(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return INACTIVE_PRODUCERS.has(normalized) || normalized.includes('jayce');
+}
+
+function getActiveTeamMember(value) {
+  if (!value || isInactiveProducer(value)) return null;
+  const normalized = String(value).trim().toLowerCase();
+  const memberId = ACTIVE_TEAM_ALIASES.get(normalized);
+  return memberId ? ACTIVE_TEAM_MEMBERS[memberId] : null;
+}
+
+function isActiveTeamMember(value) {
+  return Boolean(getActiveTeamMember(value)?.activeAppPerson);
+}
+
+function getActiveProducerEmail(producer) {
+  return getActiveTeamMember(producer)?.email || null;
+}
+
+function getAgencyZoomAssignee(producer, assignedTo) {
+  if (assignedTo) return getActiveTeamMember(assignedTo) || null;
+  return getActiveTeamMember(producer) || null;
+}
+
+function getContentHash(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+}
+
+function checkRecentAzWrite(key) {
+  const now = Date.now();
+  for (const [storedKey, timestamp] of recentAzWrites) {
+    if (now - timestamp > AZ_WRITE_DEDUPE_MS) recentAzWrites.delete(storedKey);
+  }
+  if (recentAzWrites.has(key)) return true;
+  recentAzWrites.set(key, now);
+  return false;
+}
+
+function normalizeAgencyZoomDueDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const [, year, month, day] = iso;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const slashed = raw.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (slashed) {
+    const [, month, day, inputYear] = slashed;
+    const now = new Date();
+    let year = inputYear ? Number(inputYear) : now.getFullYear();
+    if (year < 100) year += 2000;
+    const parsed = new Date(year, Number(month) - 1, Number(day));
+    if (!inputYear && parsed < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+      parsed.setFullYear(parsed.getFullYear() + 1);
+    }
+    return [
+      parsed.getFullYear(),
+      String(parsed.getMonth() + 1).padStart(2, '0'),
+      String(parsed.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+  return raw;
+}
+
+function agencyZoomTaskHasAssignee(task, employeeId) {
+  const assignees = Array.isArray(task?.assignees) ? task.assignees : [];
+  return assignees.some(assignee => Number(assignee?.id) === Number(employeeId));
+}
+
+function getAgencyZoomLeadList(data) {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  for (const key of ['leads', 'data', 'results', 'content', 'items']) {
+    if (Array.isArray(data[key])) return data[key];
+  }
+  if (Array.isArray(data?.data?.content)) return data.data.content;
+  if (Array.isArray(data?.data?.leads)) return data.data.leads;
+  return [];
+}
+
+function mapAgencyZoomLead(lead) {
+  let firstName = lead.firstname || lead.firstName || lead.first_name || '';
+  let lastName = lead.lastname || lead.lastName || lead.last_name || '';
+  const fullName = lead.customerName || lead.fullName || lead.name || `${firstName} ${lastName}`.trim();
+  if ((!firstName || !lastName) && fullName) {
+    const parts = String(fullName).trim().split(/\s+/);
+    if (!firstName) firstName = parts[0] || '';
+    if (!lastName) lastName = parts.slice(1).join(' ');
+  }
+  return {
+    id: lead.id || lead.leadId || lead.lead_id,
+    leadId: lead.leadId || lead.id || lead.lead_id,
+    fullName,
+    firstName,
+    lastName,
+    email: lead.email || lead.primaryEmail || lead.emailAddress || '',
+    phone: lead.phone || lead.customerPhone || lead.mobile_phone || lead.mobilePhone || '',
+  };
+}
 
 function getActivityType(taskId) {
   if (taskId === 'new_conv') return 'New Conversation';
@@ -556,7 +703,7 @@ function detectCallDurationMinutes(text = '') {
 
 function recordConversationActivity({ producer, clientName, leadId, notes, generatedSummary }) {
   const person = producerNameToId(producer);
-  if (!person || !['jayce', 'alissa'].includes(person)) return { counted: false, reason: 'not_producer' };
+  if (!person || !isActivePerson(person) || person === 'dan') return { counted: false, reason: 'not_producer' };
 
   const durationMinutes = detectCallDurationMinutes(notes);
   if (durationMinutes == null || durationMinutes < 8) {
@@ -793,6 +940,7 @@ app.get('/api/kpi', (req, res) => {
 
 app.post('/api/task', (req, res) => {
   const { person, taskId, date, completed, clientName, premium, numPolicies, numHouseholds, saleType } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   store.setTask(person, taskId, date, completed);
   const shouldLogActivity = isDailyActivityLogTask(taskId);
 
@@ -857,6 +1005,7 @@ app.post('/api/task', (req, res) => {
 
 app.post('/api/sale', (req, res) => {
   const { person, taskId, date, clientName, premium, numPolicies, newHousehold } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
 
   const tasks = store.getTasks(person, date);
   const current = Number(tasks[taskId]) || 0;
@@ -884,6 +1033,7 @@ app.post('/api/sale', (req, res) => {
 
 app.post('/api/sale/decrement', (req, res) => {
   const { person, taskId, date } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
 
   const allLog = store.getLog();
   const match = allLog
@@ -904,6 +1054,7 @@ app.post('/api/sale/decrement', (req, res) => {
 
 app.patch('/api/sale-details', (req, res) => {
   const { person, taskId, date, premium, numPolicies, numHouseholds } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   const log = store.getLog();
   const match = log
     .filter(e => e.person === person && e.date === date && e.taskId === taskId)
@@ -922,6 +1073,7 @@ app.patch('/api/sale-details', (req, res) => {
 
 app.post('/api/sales-day', (req, res) => {
   const { person, date, premium, policies, households } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   store.setSalesDay(person, date, { premium, policies, households });
   io.emit('refresh');
   res.json({ success: true });
@@ -929,6 +1081,7 @@ app.post('/api/sales-day', (req, res) => {
 
 app.post('/api/daily', (req, res) => {
   const { person, date, win, challenge, feedback } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   if (win !== undefined) store.setWin(person, date, win);
   if (challenge !== undefined) store.setChallenge(person, date, challenge);
   if (feedback !== undefined) store.setFeedback(person, date, feedback);
@@ -966,6 +1119,7 @@ app.get('/api/coaching', (req, res) => {
 
 app.post('/api/coaching', (req, res) => {
   const { producer, date, notes } = req.body;
+  if (!isActiveTeamMember(producer)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   if (!notes || !notes.trim()) return res.status(400).json({ error: 'Notes required' });
   store.addCoachingNote({ producer, date, notes: notes.trim(), createdAt: new Date().toISOString() });
   res.json({ success: true });
@@ -1011,47 +1165,14 @@ app.get('/api/az/leads', async (req, res) => {
   if (!search || search.length < 3) return res.json([]);
   console.log('[AZ leads] searching for:', search);
   try {
-    if (!cachedJWT) await azLogin();
-    const searchUrl = 'https://app.agencyzoom.com/v1/api/leads/list';
     const searchBody = { customerName: search, pageSize: 10, page: 0 };
-    console.log('[AZ leads] POST', searchUrl, 'body:', JSON.stringify(searchBody));
-    const response = await fetch(searchUrl, {
+    console.log('[AZ leads] POST', `${AZ_BASE_URL}/leads/list`, 'body:', JSON.stringify(searchBody));
+    const data = await azFetch('/leads/list', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${cachedJWT}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(searchBody),
     });
-    const text = await response.text();
-    const contentType = response.headers.get('content-type') || 'unknown';
-    if (!response.ok) {
-      console.error('[AZ leads] failed response:', {
-        status: response.status,
-        contentType,
-        bodyPreview: text.slice(0, 500),
-      });
-    } else {
-      console.log('[AZ leads] status:', response.status, 'content-type:', contentType);
-    }
-    if (response.status === 401) {
-      cachedJWT = null;
-      return res.status(500).json({ error: 'AZ session expired — try again' });
-    }
-    if (!response.ok) {
-      return res.status(response.status).json({ error: `AZ lead search failed with status ${response.status}` });
-    }
-    let data = {};
-    try { data = JSON.parse(text); } catch {}
-    const raw = Array.isArray(data) ? data : (data.leads || data.data || data.results || data.content || []);
-    const leads = raw.map(l => ({
-      id:        l.id,
-      fullName:  l.customerName || `${l.firstname || l.first_name || ''} ${l.lastname || l.last_name || ''}`.trim(),
-      firstName: l.firstname || l.first_name || '',
-      lastName:  l.lastname || l.last_name || '',
-      email:     l.email || l.primaryEmail || '',
-      phone:     l.phone || l.customerPhone || l.mobile_phone || '',
-    }));
+    const raw = getAgencyZoomLeadList(data);
+    const leads = raw.map(mapAgencyZoomLead).filter(lead => lead.id && lead.fullName);
     console.log('[AZ leads] mapped', leads.length, 'leads');
     res.json(leads);
   } catch (err) {
@@ -1061,28 +1182,97 @@ app.get('/api/az/leads', async (req, res) => {
 });
 
 app.post('/api/az/leads/:id/notes', async (req, res) => {
-  const { note } = req.body;
+  const { note, idempotencyKey } = req.body;
+  const cleanNote = String(note || '').trim();
+  if (!cleanNote) return res.status(400).json({ error: 'Note is required' });
+  const dedupeKey = `note:${req.params.id}:${idempotencyKey || getContentHash(cleanNote)}`;
+  if (checkRecentAzWrite(dedupeKey)) {
+    return res.json({ success: true, duplicate: true, skipped: true });
+  }
   try {
-    await azFetch(`/leads/${req.params.id}/notes`, {
+    const azResponse = await azFetch(`/leads/${req.params.id}/notes`, {
       method: 'POST',
-      body: JSON.stringify({ note }),
+      body: JSON.stringify({ note: cleanNote }),
     });
-    res.json({ success: true });
+    res.json({ success: true, azResponse });
   } catch (err) {
+    recentAzWrites.delete(dedupeKey);
     console.error('AZ post note error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/az/leads/:id/tasks', async (req, res) => {
-  const { title, due_date, assigned_to } = req.body;
+  const { title, due_date, assigned_to, producer, idempotencyKey } = req.body;
+  const assignee = getAgencyZoomAssignee(producer, assigned_to);
+  if (!assignee?.azEmployeeId) {
+    return res.status(400).json({ error: 'AgencyZoom task owner must be an active team member.' });
+  }
+  const cleanTitle = String(title || '').trim();
+  const normalizedDueDate = normalizeAgencyZoomDueDate(due_date);
+  if (!cleanTitle || !normalizedDueDate) {
+    return res.status(400).json({ error: 'AgencyZoom task title and due date are required.' });
+  }
+  const taskPayload = {
+    title: cleanTitle,
+    leadId: Number(req.params.id),
+    dueDate: normalizedDueDate,
+    taskDateTime: `${normalizedDueDate} 00:00:00`,
+    assigneeIds: [assignee.azEmployeeId],
+    assignedEmployeeIds: [assignee.azEmployeeId],
+    send_notification: false,
+    notifyAssignee: 0,
+  };
+  const dedupeKey = `task:${req.params.id}:${idempotencyKey || getContentHash(`${cleanTitle}|${normalizedDueDate}|${assignee.azEmployeeId}`)}`;
+  if (checkRecentAzWrite(dedupeKey)) {
+    return res.json({ success: true, duplicate: true, skipped: true, sentPayload: taskPayload });
+  }
   try {
-    await azFetch(`/leads/${req.params.id}/tasks`, {
+    const azResponse = await azFetch('/tasks', {
       method: 'POST',
-      body: JSON.stringify({ title, due_date, assigned_to, send_notification: false }),
+      body: JSON.stringify(taskPayload),
     });
-    res.json({ success: true });
+    const createdTaskId = azResponse?.id;
+    const createdTask = createdTaskId ? await azFetch(`/tasks/${createdTaskId}`) : null;
+    const readbackDueDate = createdTask?.dueDate || createdTask?.agencyTodo?.dueDate || '';
+    const leadMatches = Number(createdTask?.customerId || createdTask?.agencyTodo?.customerReferralId) === Number(req.params.id);
+    const dueDateMatches = readbackDueDate === normalizedDueDate;
+    const assigneeMatches = agencyZoomTaskHasAssignee(createdTask, assignee.azEmployeeId);
+
+    if (!createdTaskId || !leadMatches || !dueDateMatches || !assigneeMatches) {
+      if (createdTaskId) {
+        try {
+          await azFetch(`/tasks/${createdTaskId}`, { method: 'DELETE' });
+        } catch (cleanupErr) {
+          console.error('AZ task cleanup error:', cleanupErr.message);
+        }
+      }
+      recentAzWrites.delete(dedupeKey);
+      return res.status(502).json({
+        error: 'AgencyZoom accepted the task request but did not preserve the selected owner and due date.',
+        sentPayload: taskPayload,
+        readback: createdTask ? {
+          id: createdTask.id,
+          dueDate: readbackDueDate,
+          customerId: createdTask.customerId,
+          customerType: createdTask.customerType,
+          assignees: createdTask.assignees,
+        } : null,
+      });
+    }
+
+    res.json({
+      success: true,
+      sentPayload: taskPayload,
+      azResponse,
+      task: {
+        id: createdTask.id,
+        dueDate: readbackDueDate,
+        assignees: createdTask.assignees,
+      },
+    });
   } catch (err) {
+    recentAzWrites.delete(dedupeKey);
     console.error('AZ post task error:', err.message);
     res.status(500).json({ error: err.message });
   }
@@ -1210,6 +1400,10 @@ app.post('/api/az/leads/:id/text', async (req, res) => {
 app.post('/api/generate', async (req, res) => {
   console.log('[GENERATE HIT]', new Date().toISOString());
   const { producer, clientName, clientFullName, clientEmail, leadId, product, autoPremium, homePremium, notes, tone } = req.body;
+  const producerEmail = getActiveProducerEmail(producer);
+  if (!producerEmail) {
+    return res.status(400).json({ error: 'Producer must be an active team member.' });
+  }
 
 
   const now = new Date();
@@ -1269,38 +1463,31 @@ Return ONLY valid JSON with no markdown, no code blocks:
     });
     data.conversationActivity = conversationActivity;
 
-    console.log('[Zapier payload]', JSON.stringify({ clientName, clientEmail, notes: data.az_notes?.substring(0, 50) }));
-    console.log('[ZAPIER EMAIL TEST]', clientEmail);
-    fetch(ZAPIER_NOTES_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientName:    clientName,
-        clientEmail:   clientEmail,
-        notes:         data.az_notes,
-        email_subject: data.email?.subject,
-        email_body:    data.email?.body,
-        text:          data.text,
-        producer:      producer,
-        product:       product,
-        autoPremium:   autoPremium,
-        homePremium:   homePremium,
-      }),
-    }).catch(err => console.error('[Zapier] webhook error:', err.message));
+    if (!leadId) {
+      console.log('[Zapier payload]', JSON.stringify({ clientName, clientEmail, notes: data.az_notes?.substring(0, 50) }));
+      console.log('[ZAPIER EMAIL TEST]', clientEmail);
+      fetch(ZAPIER_NOTES_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientName:    clientName,
+          clientEmail:   clientEmail,
+          notes:         data.az_notes,
+          email_subject: data.email?.subject,
+          email_body:    data.email?.body,
+          text:          data.text,
+          producer:      producer,
+          producerEmail: producerEmail,
+          product:       product,
+          autoPremium:   autoPremium,
+          homePremium:   homePremium,
+        }),
+      }).catch(err => console.error('[Zapier] webhook error:', err.message));
 
-    await fetch(ZAPIER_TASKS_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientName: clientName,
-        clientEmail: clientEmail,
-        producer: producer,
-        nextAction: data.tasks?.[0]?.title || 'Follow up with client',
-        nextActionDate: data.tasks?.[0]?.due_date || '',
-        secondaryAction: '',
-        secondaryActionDate: ''
-      })
-    });
+      console.log('[Zapier tasks skipped] Legacy task Zap has stale Jayce assignment defaults.');
+    } else {
+      console.log('[Zapier skipped] Direct AgencyZoom update selected for lead', leadId);
+    }
 
     io.emit('refresh');
     res.json(data);
@@ -1346,9 +1533,8 @@ app.post('/api/pulse/:type/send', async (req, res) => {
 
 app.post('/api/send-email', async (req, res) => {
   const { clientName, clientEmail, producer, emailSubject, emailBody } = req.body;
-  const producerEmail = producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
-                        producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
-                        'arb@alexanderryanagency.com';
+  const producerEmail = getActiveProducerEmail(producer);
+  if (!producerEmail) return res.status(400).json({ error: 'Producer must be an active team member.' });
   const htmlBody = emailBody.replace(/\n/g, '<br>');
   try {
     await fetch(ZAPIER_EMAIL_WEBHOOK, {
@@ -1365,9 +1551,8 @@ app.post('/api/send-email', async (req, res) => {
 
 app.post('/api/send-text', async (req, res) => {
   const { clientName, clientEmail, producer, textMessage } = req.body;
-  const producerEmail = producer === 'Jayce' ? 'jayce@alexanderryanagency.com' :
-                        producer === 'Alissa' ? 'alissa@alexanderryanagency.com' :
-                        'arb@alexanderryanagency.com';
+  const producerEmail = getActiveProducerEmail(producer);
+  if (!producerEmail) return res.status(400).json({ error: 'Producer must be an active team member.' });
   try {
     await fetch(ZAPIER_TEXT_WEBHOOK, {
       method: 'POST',

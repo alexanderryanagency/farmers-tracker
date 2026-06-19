@@ -114,7 +114,8 @@ function OutputCard({ title, icon: Icon, content, subContent, copyText, onApprov
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function SendSuite({ people, currentUser }) {
-  const producers = people.filter(p => p.role === 'Producer');
+  const taskOwners = people.filter(p => p.active !== false);
+  const producers = taskOwners.filter(p => p.role === 'Producer');
   const isAdmin   = currentUser?.role === 'admin';
 
   const defaultProducer = isAdmin
@@ -126,9 +127,10 @@ export default function SendSuite({ people, currentUser }) {
   // Client search state
   const [clientName,    setClientName]    = useState('');
   const [clientEmail,   setClientEmail]   = useState('');
-  const [selectedLead,  setSelectedLead]  = useState(null);  // { id, fullName, firstName, lastName, email, phone }
+  const [selectedLead,  setSelectedLead]  = useState(null);  // { id, leadId, fullName, firstName, lastName, email, phone }
   const [searchResults, setSearchResults] = useState([]);
   const [searching,     setSearching]     = useState(false);
+  const [searchError,   setSearchError]   = useState('');
   const [showDropdown,  setShowDropdown]  = useState(false);
   const searchTimerRef = useRef(null);
   const dropdownRef    = useRef(null);
@@ -152,6 +154,7 @@ export default function SendSuite({ people, currentUser }) {
   const [textSent,     setTextSent]     = useState(false);
 
   const { toasts, addToast } = useToasts();
+  const generateInFlightRef = useRef(false);
 
   const firstName = clientName.trim().split(' ')[0];
   const quotePolicyCount = quotePolicies.length;
@@ -164,6 +167,13 @@ export default function SendSuite({ people, currentUser }) {
     setEmailSent(false);
     setTextSent(false);
   }, [result]);
+
+  useEffect(() => {
+    const allowedNames = [...taskOwners.map(p => p.name), 'Alexander (ARB)'];
+    if (!allowedNames.includes(producerName)) {
+      setProducerName(defaultProducer);
+    }
+  }, [defaultProducer, producerName, taskOwners]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -184,6 +194,7 @@ export default function SendSuite({ people, currentUser }) {
     clearTimeout(searchTimerRef.current);
     if (val.trim().length < 3) {
       setSearchResults([]);
+      setSearchError('');
       setShowDropdown(false);
       return;
     }
@@ -192,10 +203,15 @@ export default function SendSuite({ people, currentUser }) {
       try {
         const res = await fetch(`/api/az/leads?search=${encodeURIComponent(val.trim())}`);
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'AgencyZoom lead search failed');
         setSearchResults(Array.isArray(data) ? data.map(normalizeLead).filter(lead => lead.fullName) : []);
+        setSearchError('');
         setShowDropdown(true);
       } catch (err) {
         console.error('Lead search error:', err);
+        setSearchResults([]);
+        setSearchError(err.message || 'AgencyZoom lead search failed');
+        setShowDropdown(true);
       } finally {
         setSearching(false);
       }
@@ -203,11 +219,18 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   function normalizeLead(lead) {
-    const firstName = lead.firstName || lead.firstname || lead.first_name || '';
-    const lastName  = lead.lastName  || lead.lastname  || lead.last_name  || '';
+    let firstName = lead.firstName || lead.firstname || lead.first_name || '';
+    let lastName  = lead.lastName  || lead.lastname  || lead.last_name  || '';
+    const fullName = lead.fullName || lead.customerName || `${firstName} ${lastName}`.trim();
+    if ((!firstName || !lastName) && fullName) {
+      const parts = fullName.trim().split(/\s+/);
+      if (!firstName) firstName = parts[0] || '';
+      if (!lastName) lastName = parts.slice(1).join(' ');
+    }
     return {
-      id:        lead.id,
-      fullName:  lead.fullName || lead.customerName || `${firstName} ${lastName}`.trim(),
+      id:        lead.id || lead.leadId,
+      leadId:    lead.leadId || lead.id,
+      fullName,
       firstName,
       lastName,
       email:     lead.email || lead.primaryEmail || '',
@@ -229,6 +252,7 @@ export default function SendSuite({ people, currentUser }) {
     setClientName('');
     setClientEmail('');
     setSearchResults([]);
+    setSearchError('');
     setShowDropdown(false);
   }
 
@@ -271,11 +295,13 @@ export default function SendSuite({ people, currentUser }) {
   }
 
   async function handleGenerate() {
-    if (!clientName.trim()) return;
+    if (!clientName.trim() || loading || generateInFlightRef.current) return;
+    generateInFlightRef.current = true;
     setLoading(true);
     setError(null);
     setResult(null);
     setQuoteExport(null);
+    const generateKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
     try {
       const res  = await fetch('/api/generate', {
@@ -286,7 +312,7 @@ export default function SendSuite({ people, currentUser }) {
           clientName:  firstName,
           clientFullName: clientName.trim(),
           clientEmail,
-          leadId:      selectedLead?.id || null,
+          leadId:      selectedLead?.leadId || selectedLead?.id || null,
           notes,
           tone,
         }),
@@ -295,36 +321,79 @@ export default function SendSuite({ people, currentUser }) {
       if (!res.ok) throw new Error(data.error || 'Failed to generate');
       setResult(data);
 
-      if (selectedLead?.id) {
-        postToAZ(selectedLead.id, data);
+      if (selectedLead?.leadId || selectedLead?.id) {
+        await postToAZ(selectedLead.leadId || selectedLead.id, data, generateKey);
       }
     } catch (err) {
       setError(err.message);
     } finally {
+      generateInFlightRef.current = false;
       setLoading(false);
     }
   }
 
-  function isEmailTextTask(title) {
-    return /send.*(email|text|sms)|email.*follow|follow.*email|text.*follow|follow.*text/i.test(title || '');
+  function normalizeDueDate(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (iso) {
+      const [, year, month, day] = iso;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    const slashed = raw.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+    if (slashed) {
+      const [, month, day, inputYear] = slashed;
+      const today = new Date();
+      let year = inputYear ? Number(inputYear) : today.getFullYear();
+      if (year < 100) year += 2000;
+      const parsed = new Date(year, Number(month) - 1, Number(day));
+      if (!inputYear && parsed < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+        parsed.setFullYear(parsed.getFullYear() + 1);
+      }
+      return [
+        parsed.getFullYear(),
+        String(parsed.getMonth() + 1).padStart(2, '0'),
+        String(parsed.getDate()).padStart(2, '0'),
+      ].join('-');
+    }
+    return raw;
   }
 
-  async function postToAZ(leadId, data) {
-    const azRequests = [
-      fetch(`/api/az/leads/${leadId}/notes`, {
-        method:  'POST',
+  async function postToAZ(leadId, data, generateKey) {
+    async function postJson(url, body) {
+      const response = await fetch(url, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: data.az_notes }),
-      }).then(r => r.json()),
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Request failed with status ${response.status}`);
+      return payload;
+    }
 
-      ...(data.tasks || [])
-        .filter(t => !isEmailTextTask(t.title))
+    const azTasks = (data.tasks || [])
+      .map(t => ({
+        ...t,
+        title: String(t.title || '').trim(),
+        due_date: normalizeDueDate(t.due_date),
+      }))
+      .filter(t => t.title && t.due_date)
+      .slice(0, 1);
+
+    const azRequests = [
+      postJson(`/api/az/leads/${leadId}/notes`, {
+        note: data.az_notes,
+        idempotencyKey: `${generateKey}:note`,
+      }),
+
+      ...azTasks
         .map(t =>
-          fetch(`/api/az/leads/${leadId}/tasks`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: t.title, due_date: t.due_date }),
-          }).then(r => r.json())
+          postJson(`/api/az/leads/${leadId}/tasks`, {
+            title: t.title,
+            due_date: t.due_date,
+            producer: producerName,
+            idempotencyKey: `${generateKey}:task:${t.title}:${t.due_date}`,
+          })
         ),
     ];
 
@@ -389,8 +458,8 @@ export default function SendSuite({ people, currentUser }) {
           }),
         }),
       ];
-      if (selectedLead?.id) {
-        requests.push(fetch(`/api/az/leads/${selectedLead.id}/email`, {
+      if (selectedLead?.leadId || selectedLead?.id) {
+        requests.push(fetch(`/api/az/leads/${selectedLead.leadId || selectedLead.id}/email`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subject, body }),
@@ -421,8 +490,8 @@ export default function SendSuite({ people, currentUser }) {
           }),
         }),
       ];
-      if (selectedLead?.id) {
-        requests.push(fetch(`/api/az/leads/${selectedLead.id}/text`, {
+      if (selectedLead?.leadId || selectedLead?.id) {
+        requests.push(fetch(`/api/az/leads/${selectedLead.leadId || selectedLead.id}/text`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message }),
@@ -459,6 +528,7 @@ export default function SendSuite({ people, currentUser }) {
               <label className="form-label">Producer</label>
               <select className="form-select" value={producerName} onChange={e => setProducerName(e.target.value)}>
                 {producers.map(p => <option key={p.id}>{p.name}</option>)}
+                {taskOwners.filter(p => p.role !== 'Producer').map(p => <option key={p.id}>{p.name}</option>)}
                 <option key="arb">Alexander (ARB)</option>
               </select>
             </div>
@@ -489,7 +559,7 @@ export default function SendSuite({ people, currentUser }) {
             </div>
             {selectedLead && (
               <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 4 }}>
-                ✓ Linked: {selectedLead.fullName}{selectedLead.email || selectedLead.phone ? ` · ${selectedLead.email || selectedLead.phone}` : ''}
+                ✓ Linked: {selectedLead.fullName}{selectedLead.email || selectedLead.phone ? ` · ${[selectedLead.email, selectedLead.phone].filter(Boolean).join(' · ')}` : ''}
               </div>
             )}
             {searching && (
@@ -500,12 +570,17 @@ export default function SendSuite({ people, currentUser }) {
                 {searchResults.map(lead => (
                   <button key={lead.id} className="lead-result-item" onMouseDown={() => selectLead(lead)}>
                     <span className="lead-result-name">{lead.fullName}</span>
-                    {(lead.email || lead.phone) && <span className="lead-result-phone">{lead.email || lead.phone}</span>}
+                    {(lead.email || lead.phone) && <span className="lead-result-phone">{[lead.email, lead.phone].filter(Boolean).join(' · ')}</span>}
                   </button>
                 ))}
               </div>
             )}
-            {showDropdown && !searching && searchResults.length === 0 && clientName.trim().length >= 3 && (
+            {showDropdown && !searching && searchError && (
+              <div className="lead-search-dropdown">
+                <div className="lead-no-results">{searchError}</div>
+              </div>
+            )}
+            {showDropdown && !searching && !searchError && searchResults.length === 0 && clientName.trim().length >= 3 && (
               <div className="lead-search-dropdown">
                 <div className="lead-no-results">No leads found</div>
               </div>

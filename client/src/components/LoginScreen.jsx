@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 const USERS = [
-  { email: 'jayce@alexanderryanagency.com',  password: 'jayce2026',  name: 'Jayce',  role: 'producer', producer: 'jayce'  },
   { email: 'alissa@alexanderryanagency.com', password: 'alissa2026', name: 'Alissa', role: 'producer', producer: 'alissa' },
   { email: 'dan@alexanderryanagency.com',    password: 'dan2026',    name: 'Dan',    role: 'csr',      producer: 'dan'    },
   { email: 'arb@alexanderryanagency.com',    password: 'arb2026',    name: 'Alex',   role: 'admin',    producer: null     },

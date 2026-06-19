@@ -41,7 +41,7 @@ function MobileNav({ activeTab, onNavigate }) {
 const socket = io();
 
 const PEOPLE = [
-  { id: 'jayce',  name: 'Jayce',  role: 'Producer', photo: '/jayce.png',  racePhoto: '/race-jayce.png'  },
+  { id: 'jayce',  name: 'Jayce',  role: 'Producer', photo: '/jayce.png',  racePhoto: '/race-jayce.png', active: false },
   { id: 'alissa', name: 'Alissa', role: 'Producer', photo: '/alissa.png', racePhoto: '/race-alissa.png' },
   { id: 'dan',    name: 'Dan',    role: 'CSR',      photo: '/dan.png',    racePhoto: '/race-dan.png'    },
 ];
@@ -85,6 +85,13 @@ export default function App() {
   }
 
   const today = getLocalDateString();
+  const activePeople = PEOPLE.filter(p => p.active !== false);
+
+  useEffect(() => {
+    if (currentUser?.producer && !activePeople.some(p => p.id === currentUser.producer)) {
+      handleLogout();
+    }
+  }, [currentUser, activePeople]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -134,12 +141,12 @@ export default function App() {
         onLogout={handleLogout}
       />
       <main className="main-content">
-        {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={PEOPLE} theme={theme} />}
-        {activeTab === 'send'     && <SendSuite people={PEOPLE} currentUser={currentUser} />}
-        {activeTab === 'activity' && <ActivityTracker people={PEOPLE} currentUser={currentUser} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
-        {activeTab === 'stats'    && <MyStats kpiData={kpiData} people={PEOPLE} />}
-        {activeTab === 'coach'    && <CoachsCorner people={PEOPLE} />}
-        {activeTab === 'trophy'   && <TrophyCase weekData={weekData} kpiData={kpiData} people={PEOPLE} />}
+        {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={activePeople} theme={theme} />}
+        {activeTab === 'send'     && <SendSuite people={activePeople} currentUser={currentUser} />}
+        {activeTab === 'activity' && <ActivityTracker people={activePeople} currentUser={currentUser} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
+        {activeTab === 'stats'    && <MyStats kpiData={kpiData} people={activePeople} />}
+        {activeTab === 'coach'    && <CoachsCorner people={activePeople} />}
+        {activeTab === 'trophy'   && <TrophyCase weekData={weekData} kpiData={kpiData} people={activePeople} />}
       </main>
       <MobileNav activeTab={activeTab} onNavigate={setActiveTab} />
     </div>

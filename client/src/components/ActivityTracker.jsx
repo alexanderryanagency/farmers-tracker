@@ -625,6 +625,12 @@ export default function ActivityTracker({ people, currentUser, today, onRefresh,
   const [activePerson, setActivePerson] = useState(defaultPersonId);
   const person = people.find(p => p.id === activePerson) || people[0];
 
+  useEffect(() => {
+    if (!people.some(p => p.id === activePerson) && people[0]) {
+      setActivePerson(people[0].id);
+    }
+  }, [activePerson, people]);
+
   return (
     <div className="activity-page">
       <div className="activity-producer-tabs">
