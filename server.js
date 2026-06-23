@@ -214,6 +214,11 @@ function isActivePerson(person) {
   return ACTIVE_PERSONS.includes(person);
 }
 
+function isAdminCorrection(req) {
+  const actor = req.body?.actor || {};
+  return actor.role === 'admin' && String(actor.email || '').toLowerCase() === 'arb@alexanderryanagency.com';
+}
+
 function isInactiveProducer(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return INACTIVE_PRODUCERS.has(normalized) || normalized.includes('jayce');
@@ -1094,22 +1099,69 @@ app.get('/api/log', (req, res) => {
 });
 
 app.patch('/api/log/:id', (req, res) => {
+  if (!isAdminCorrection(req)) return res.status(403).json({ error: 'Admin access required' });
   const { clientName, premium, numPolicies } = req.body;
+  const entry = store.getLog().find(item => String(item.id) === String(req.params.id));
+  if (!entry) return res.status(404).json({ error: 'Not found' });
   const updates = {};
   if (clientName !== undefined) updates.clientName = clientName;
   if (premium !== undefined) updates.premium = premium;
   if (numPolicies !== undefined) updates.numPolicies = numPolicies;
   const ok = store.updateLogEntry(req.params.id, updates);
   if (!ok) return res.status(404).json({ error: 'Not found' });
+  if (clientName !== undefined) store.setClientName(entry.person, entry.taskId, entry.date, clientName);
+  if (/^sale_\d+$/.test(entry.taskId) || /^life_app_back_\d+$/.test(entry.taskId)) {
+    const existing = store.getSaleDetails(entry.person, entry.date)[entry.taskId] || {};
+    store.setSaleDetails(entry.person, entry.taskId, entry.date, {
+      ...existing,
+      premium: premium ?? existing.premium,
+      numPolicies: numPolicies ?? existing.numPolicies,
+    });
+  }
   io.emit('refresh');
   res.json({ success: true });
 });
 
 app.delete('/api/log/:id', (req, res) => {
+  if (!isAdminCorrection(req)) return res.status(403).json({ error: 'Admin access required' });
+  const entry = store.getLog().find(item => String(item.id) === String(req.params.id));
+  if (!entry) return res.status(404).json({ error: 'Not found' });
   const ok = store.deleteLogEntry(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Not found' });
+  if (entry.taskId === 'new_conv') {
+    const current = Number(store.getTasks(entry.person, entry.date).new_conv) || 0;
+    store.setTask(entry.person, 'new_conv', entry.date, Math.max(0, current - 1));
+  } else if (entry.taskId) {
+    store.setTask(entry.person, entry.taskId, entry.date, false);
+    store.setClientName(entry.person, entry.taskId, entry.date, null);
+    if (/^sale_\d+$/.test(entry.taskId) || /^life_app_back_\d+$/.test(entry.taskId)) {
+      store.setSaleDetails(entry.person, entry.taskId, entry.date, null);
+    }
+  }
   io.emit('refresh');
   res.json({ success: true });
+});
+
+app.patch('/api/activity-correction/conversations', (req, res) => {
+  if (!isAdminCorrection(req)) return res.status(403).json({ error: 'Admin access required' });
+  const { person, date } = req.body;
+  const count = Number(req.body.count);
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isInteger(count) || count < 0 || count > 50) {
+    return res.status(400).json({ error: 'Valid date and conversation count required' });
+  }
+
+  const current = Number(store.getTasks(person, date).new_conv) || 0;
+  if (count < current) {
+    const entries = store.getLog()
+      .filter(entry => entry.person === person && entry.date === date && entry.taskId === 'new_conv')
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    entries.slice(0, current - count).forEach(entry => store.deleteLogEntry(entry.id));
+  }
+  store.setTask(person, 'new_conv', date, count);
+  if (count === 0) store.setClientName(person, 'new_conv', date, null);
+  io.emit('refresh');
+  res.json({ success: true, count, points: getNewConvPoints(count) });
 });
 
 // Coaching notes

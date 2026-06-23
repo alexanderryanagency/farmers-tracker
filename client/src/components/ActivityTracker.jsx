@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react';
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -196,6 +196,36 @@ function ClientNameModal({ task, onCancel, onSave }) {
   );
 }
 
+function ActivityCorrectionModal({ entry, onCancel, onSave }) {
+  const [clientName, setClientName] = useState(entry.clientName || '');
+  const [premium, setPremium] = useState(entry.premium || '');
+  const [numPolicies, setNumPolicies] = useState(entry.numPolicies ?? '');
+  const hasRevenue = entry.activityType === 'Sale' || entry.activityType === 'Life App Back';
+
+  return (
+    <div className="overlay" onClick={event => event.target === event.currentTarget && onCancel()}>
+      <div className="modal correction-modal">
+        <div className="modal-tag">Admin Correction</div>
+        <div className="modal-title">Edit {entry.activityType}</div>
+        <div className="modal-field-label">Client Name</div>
+        <input className="modal-input" value={clientName} onChange={event => setClientName(event.target.value)} autoFocus />
+        {hasRevenue && (
+          <>
+            <div className="modal-field-label">Premium</div>
+            <input className="modal-input" inputMode="decimal" value={premium} onChange={event => setPremium(event.target.value)} />
+            <div className="modal-field-label">Policies</div>
+            <input className="modal-input" type="number" min="0" value={numPolicies} onChange={event => setNumPolicies(event.target.value)} />
+          </>
+        )}
+        <div className="modal-actions">
+          <button className="modal-cancel" onClick={onCancel}>Cancel</button>
+          <button className="modal-confirm" onClick={() => onSave({ clientName, premium, numPolicies })}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function slotId(task, slot) {
   return `${task.baseId}_${slot}`;
 }
@@ -216,6 +246,9 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
   const [feedbackValue, setFeedbackValue] = useState('');
   const [revenueTask, setRevenueTask] = useState(null);
   const [clientTask, setClientTask] = useState(null);
+  const [editingConversations, setEditingConversations] = useState(false);
+  const [conversationDraft, setConversationDraft] = useState('0');
+  const [correctionEntry, setCorrectionEntry] = useState(null);
 
   const winTimer = useRef(null);
   const challengeTimer = useRef(null);
@@ -244,7 +277,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
   const canEdit = currentUser?.role === 'admin' || currentUser?.producer === person.id;
   const { weekDates } = weekData;
   const todayTasks = personData.tasks[selectedDate] || {};
-  const dayLog = weekData.activityLog?.[selectedDate] || [];
+  const dayLog = (weekData.activityLog?.[selectedDate] || []).filter(entry => entry.person === person.id);
   const convCount = Number(todayTasks.new_conv) || 0;
   const kpi = kpiData?.data?.[person.id];
   const missedCallsValue = todayTasks.missed_calls || '';
@@ -279,6 +312,33 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
     });
     onRefresh();
     fetchWeekData();
+  }
+
+  function startConversationEdit() {
+    setConversationDraft(String(convCount));
+    setEditingConversations(true);
+  }
+
+  async function saveConversationCount() {
+    const count = Number(conversationDraft);
+    if (!Number.isInteger(count) || count < 0) return;
+    await save('/api/activity-correction/conversations', {
+      person: person.id,
+      date: selectedDate,
+      count,
+      actor: currentUser,
+    }, 'PATCH');
+    setEditingConversations(false);
+  }
+
+  async function saveActivityCorrection(values) {
+    await save(`/api/log/${correctionEntry.id}`, { ...values, actor: currentUser }, 'PATCH');
+    setCorrectionEntry(null);
+  }
+
+  async function deleteActivity(entry) {
+    if (!window.confirm(`Delete this ${entry.activityType} entry?`)) return;
+    await save(`/api/log/${entry.id}`, { actor: currentUser }, 'DELETE');
   }
 
   function handleTaskToggle(task) {
@@ -493,7 +553,27 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
                           <div className="task-label">{task.label}</div>
                           <div className="task-client">Auto-counted from 8+ minute Send Suite calls</div>
                         </div>
-                        <span className="readonly-count">{convCount}</span>
+                        {currentUser?.role === 'admin' && editingConversations ? (
+                          <div className="conversation-correction">
+                            <input
+                              className="conv-select"
+                              type="number"
+                              min="0"
+                              max="50"
+                              value={conversationDraft}
+                              onChange={event => setConversationDraft(event.target.value)}
+                              onKeyDown={event => event.key === 'Enter' && saveConversationCount()}
+                              autoFocus
+                            />
+                            <button type="button" onClick={saveConversationCount} title="Save conversation count"><Check size={15} /></button>
+                            <button type="button" onClick={() => setEditingConversations(false)} title="Cancel"><X size={15} /></button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="readonly-count">{convCount}</span>
+                            {currentUser?.role === 'admin' && <button type="button" className="activity-icon-btn" onClick={startConversationEdit} title="Edit conversation count"><Pencil size={15} /></button>}
+                          </>
+                        )}
                         <span className="task-pts">+{getNewConvPoints(convCount)}</span>
                       </div>
                     );
@@ -582,22 +662,29 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
           <div className="activity-log-empty">No tracked activity has been logged for this date yet.</div>
         ) : (
           <div className="activity-log-table">
-            <div className="activity-log-row activity-log-head">
+            <div className={`activity-log-row activity-log-head${currentUser?.role === 'admin' ? ' with-actions' : ''}`}>
               <span>Time</span>
               <span>Producer</span>
               <span>Activity Type</span>
               <span>Client</span>
               <span>Details</span>
               <span>Points</span>
+              {currentUser?.role === 'admin' && <span>Actions</span>}
             </div>
             {dayLog.map(entry => (
-              <div className="activity-log-row" key={entry.id || `${entry.timestamp}-${entry.person}-${entry.activityType}`}>
+              <div className={`activity-log-row${currentUser?.role === 'admin' ? ' with-actions' : ''}`} key={entry.id || `${entry.timestamp}-${entry.person}-${entry.activityType}`}>
                 <span>{entry.time || '--'}</span>
                 <span>{entry.producer || '--'}</span>
                 <span>{entry.activityType}</span>
                 <span>{entry.clientName || '--'}</span>
                 <span>{entry.details || '--'}</span>
                 <span>{entry.points ? `+${entry.points}` : '0'}</span>
+                {currentUser?.role === 'admin' && (
+                  <span className="activity-row-actions">
+                    <button type="button" onClick={() => setCorrectionEntry(entry)} title="Edit activity"><Pencil size={14} /></button>
+                    <button type="button" onClick={() => deleteActivity(entry)} title="Delete activity"><Trash2 size={14} /></button>
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -609,6 +696,9 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
       )}
       {clientTask && (
         <ClientNameModal task={clientTask} onCancel={() => setClientTask(null)} onSave={handleClientTaskSave} />
+      )}
+      {correctionEntry && (
+        <ActivityCorrectionModal entry={correctionEntry} onCancel={() => setCorrectionEntry(null)} onSave={saveActivityCorrection} />
       )}
     </div>
   );

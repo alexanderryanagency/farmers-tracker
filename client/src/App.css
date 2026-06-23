@@ -946,6 +946,17 @@ html, body, #root {
   padding: 5px 8px; cursor: pointer; width: 60px; flex-shrink: 0; text-align: center;
 }
 .conv-select:focus { outline: none; border-color: var(--gold); }
+.conversation-correction { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.conversation-correction button,
+.activity-icon-btn,
+.activity-row-actions button {
+  width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px; background: transparent;
+  color: var(--muted); cursor: pointer;
+}
+.conversation-correction button:hover,
+.activity-icon-btn:hover,
+.activity-row-actions button:hover { color: var(--gold); border-color: var(--gold); }
 .missed-call-options { display: grid; gap: 8px; }
 .missed-call-option {
   display: flex; align-items: center; gap: 10px;
@@ -1025,6 +1036,10 @@ html, body, #root {
 .activity-log-row span:last-child {
   color: var(--gold); font-weight: 900; font-variant-numeric: tabular-nums;
 }
+.activity-log-row.with-actions { grid-template-columns: 84px 110px 150px minmax(130px, 1fr) minmax(190px, 1.4fr) 72px 78px; min-width: 850px; }
+.activity-log-row.with-actions > span:last-child { color: var(--text); font-weight: 400; }
+.activity-row-actions { display: flex; gap: 5px; overflow: visible !important; }
+.activity-row-actions button:last-child:hover { color: #fb7185; border-color: #fb7185; }
 
 /* ════════════════════════════
    MY STATS
