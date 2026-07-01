@@ -1625,7 +1625,6 @@ html, body, #root {
 }
 .operations-primary-btn,
 .operations-clear-btn,
-.operations-next-btn,
 .operations-icon-btn {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1649,7 +1648,6 @@ html, body, #root {
 }
 .operations-primary-btn:hover,
 .operations-clear-btn:hover,
-.operations-next-btn:hover,
 .operations-icon-btn:hover {
   transform: translateY(-1px);
   border-color: var(--gold);
@@ -1689,8 +1687,7 @@ html, body, #root {
   padding: 0 10px;
   font-weight: 700;
 }
-.operations-filters option,
-.operations-status-select option { background: var(--card); color: var(--text); }
+.operations-filters option { background: var(--card); color: var(--text); }
 .operations-clear-btn {
   height: 38px;
   padding: 0 11px;
@@ -1755,10 +1752,10 @@ html, body, #root {
   border: 1px solid var(--border);
   background: var(--card);
   box-shadow: var(--card-shadow);
-  padding: 12px;
+  padding: 10px 10px 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 .operations-card::before {
   content: '';
@@ -1782,15 +1779,15 @@ html, body, #root {
   padding-left: 4px;
 }
 .operations-card-top strong {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.25;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 .operations-icon-btn {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
   color: var(--muted);
 }
 .operations-badges {
@@ -1804,10 +1801,10 @@ html, body, #root {
   border-radius: 999px;
   background: var(--hover-bg);
   color: var(--text);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1.2;
-  padding: 5px 8px;
+  padding: 4px 7px;
 }
 .operations-card-meta {
   display: flex;
@@ -1826,46 +1823,18 @@ html, body, #root {
   background: var(--gdim);
   color: var(--gold);
 }
-.operations-card-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-}
-.operations-card-actions button {
-  min-height: 28px;
-  border-radius: 7px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.1;
-  padding: 4px 5px;
-}
-.operations-card-actions button:hover,
-.operations-card-actions button.selected {
-  color: var(--text);
-  border-color: var(--gold);
-  background: var(--gdim);
-}
-.operations-next-btn,
-.operations-status-select {
+.operations-move-select {
   width: 100%;
-  min-height: 32px;
-}
-.operations-next-btn {
-  padding: 0 10px;
-  color: var(--gold);
-}
-.operations-status-select {
+  min-height: 30px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--input-bg);
   color: var(--text);
   padding: 0 9px;
   font-weight: 800;
+  font-size: 11px;
 }
+.operations-move-select option { background: var(--card); color: var(--text); }
 .operations-empty {
   border: 1px dashed var(--border);
   border-radius: 8px;
@@ -1894,6 +1863,28 @@ html, body, #root {
   letter-spacing: 0.6px;
 }
 .operations-full-field { grid-column: 1 / -1; }
+.operations-policy-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.operations-policy-picker button {
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 10px;
+}
+.operations-policy-picker button:hover,
+.operations-policy-picker button.selected {
+  color: var(--text);
+  border-color: var(--gold);
+  background: var(--gdim);
+}
 .operations-error {
   border: 1px solid rgba(240, 68, 111, 0.45);
   border-radius: 8px;

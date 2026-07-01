@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, ArrowRight, Edit3, Plus, Search, X } from 'lucide-react';
+import { Archive, Edit3, Plus, Search, X } from 'lucide-react';
 
 const DEFAULT_STAGES = [
   'Sold',
@@ -25,18 +25,27 @@ const DEFAULT_FINAL_STATUSES = [
 const EMPTY_CARD = {
   clientName: '',
   producer: '',
-  policyType: '',
+  policyTypes: [],
   carrier: '',
   effectiveDate: '',
   stage: 'Sold',
   finalStatus: '',
 };
 
-const POLICY_TYPES = ['Auto', 'Home', 'Life', 'Umbrella', 'Renters', 'Condo', 'Landlord', 'Business', 'Other'];
+const POLICY_TYPES = ['Home', 'Auto', 'Life', 'Umbrella', 'Renters', 'Condo', 'Landlord', 'Manufactured Home', 'Other'];
 const CARRIERS = ['Farmers', 'Bristol West', 'Foremost', 'Other'];
 
 function uniqueValues(cards, key, fallbacks = []) {
   return [...new Set([...fallbacks, ...cards.map(card => card[key]).filter(Boolean)])].sort();
+}
+
+function normalizePolicyTypes(card) {
+  if (Array.isArray(card.policyTypes)) return card.policyTypes.filter(Boolean);
+  return card.policyType ? [card.policyType] : [];
+}
+
+function uniquePolicyTypes(cards, fallbacks = []) {
+  return [...new Set([...fallbacks, ...cards.flatMap(normalizePolicyTypes)])].filter(Boolean).sort();
 }
 
 function prettyDate(date) {
@@ -46,8 +55,17 @@ function prettyDate(date) {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function PipelineModal({ title, form, setForm, people, stages, finalStatuses, onSave, onCancel, error }) {
+function PipelineModal({ title, form, setForm, people, stages, finalStatuses, policyTypes, onSave, onCancel, error }) {
   const archived = form.stage === 'Archived';
+  const selectedPolicyTypes = normalizePolicyTypes(form);
+
+  function togglePolicyType(policyType) {
+    const next = selectedPolicyTypes.includes(policyType)
+      ? selectedPolicyTypes.filter(type => type !== policyType)
+      : [...selectedPolicyTypes, policyType];
+    setForm({ ...form, policyTypes: next });
+  }
+
   return (
     <div className="overlay" onClick={event => event.target === event.currentTarget && onCancel()}>
       <div className="modal operations-modal">
@@ -68,12 +86,20 @@ function PipelineModal({ title, form, setForm, people, stages, finalStatuses, on
               <option value="ARB">ARB</option>
             </select>
           </label>
-          <label>
+          <label className="operations-full-field">
             <span>Policy Type</span>
-            <select className="modal-input" value={form.policyType} onChange={event => setForm({ ...form, policyType: event.target.value })}>
-              <option value="">Select type</option>
-              {POLICY_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
+            <div className="operations-policy-picker">
+              {policyTypes.map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  className={selectedPolicyTypes.includes(type) ? 'selected' : ''}
+                  onClick={() => togglePolicyType(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
           </label>
           <label>
             <span>Carrier</span>
@@ -112,9 +138,9 @@ function PipelineModal({ title, form, setForm, people, stages, finalStatuses, on
   );
 }
 
-function OperationsCard({ card, stages, finalStatuses, onMove, onEdit }) {
+function OperationsCard({ card, stages, onMove, onEdit }) {
   const stageIndex = stages.indexOf(card.stage);
-  const nextStage = stageIndex >= 0 ? stages[stageIndex + 1] : null;
+  const policyTypes = normalizePolicyTypes(card);
 
   return (
     <article className={`operations-card stage-${stageIndex}`}>
@@ -126,16 +152,12 @@ function OperationsCard({ card, stages, finalStatuses, onMove, onEdit }) {
       </div>
       <div className="operations-badges">
         <span>{card.producer}</span>
-        <span>{card.policyType}</span>
+        {policyTypes.map(policyType => <span key={policyType}>{policyType}</span>)}
         <span>{card.carrier}</span>
       </div>
       <div className="operations-card-meta">
         <span>Effective</span>
         <strong>{prettyDate(card.effectiveDate)}</strong>
-      </div>
-      <div className="operations-card-meta">
-        <span>Stage</span>
-        <strong>{card.stage}</strong>
       </div>
       {card.stage === 'Archived' && (
         <div className="operations-final-status">
@@ -143,29 +165,12 @@ function OperationsCard({ card, stages, finalStatuses, onMove, onEdit }) {
           {card.finalStatus || 'Needs status'}
         </div>
       )}
-      <div className="operations-card-actions">
+      <select className="operations-move-select" value="" onChange={event => onMove(card, event.target.value)}>
+        <option value="">Move to...</option>
         {stages.map(stage => (
-          <button
-            key={stage}
-            className={card.stage === stage ? 'selected' : ''}
-            onClick={() => onMove(card, stage)}
-            title={`Move to ${stage}`}
-          >
-            {stage}
-          </button>
+          <option key={stage} value={stage} disabled={stage === card.stage}>{stage}</option>
         ))}
-      </div>
-      {nextStage && (
-        <button className="operations-next-btn" onClick={() => onMove(card, nextStage)}>
-          Move to {nextStage} <ArrowRight size={14} />
-        </button>
-      )}
-      {card.stage === 'Archived' && (
-        <select className="operations-status-select" value={card.finalStatus || ''} onChange={event => onMove(card, 'Archived', event.target.value)}>
-          <option value="">Final Status</option>
-          {finalStatuses.map(status => <option key={status} value={status}>{status}</option>)}
-        </select>
-      )}
+      </select>
     </article>
   );
 }
@@ -174,6 +179,7 @@ export default function OperationsPipeline({ people = [] }) {
   const [cards, setCards] = useState([]);
   const [stages, setStages] = useState(DEFAULT_STAGES);
   const [finalStatuses, setFinalStatuses] = useState(DEFAULT_FINAL_STATUSES);
+  const [policyTypes, setPolicyTypes] = useState(POLICY_TYPES);
   const [filters, setFilters] = useState({ query: '', producer: '', carrier: '', policyType: '', finalStatus: '' });
   const [modalMode, setModalMode] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
@@ -187,6 +193,7 @@ export default function OperationsPipeline({ people = [] }) {
     setCards(Array.isArray(data.cards) ? data.cards : []);
     setStages(Array.isArray(data.stages) ? data.stages : DEFAULT_STAGES);
     setFinalStatuses(Array.isArray(data.finalStatuses) ? data.finalStatuses : DEFAULT_FINAL_STATUSES);
+    setPolicyTypes(Array.isArray(data.policyTypes) ? data.policyTypes : POLICY_TYPES);
   }
 
   useEffect(() => {
@@ -195,17 +202,17 @@ export default function OperationsPipeline({ people = [] }) {
 
   const producerOptions = useMemo(() => uniqueValues(cards, 'producer', people.map(person => person.name).concat('ARB')), [cards, people]);
   const carrierOptions = useMemo(() => uniqueValues(cards, 'carrier', CARRIERS), [cards]);
-  const policyTypeOptions = useMemo(() => uniqueValues(cards, 'policyType', POLICY_TYPES), [cards]);
+  const policyTypeOptions = useMemo(() => uniquePolicyTypes(cards, policyTypes), [cards, policyTypes]);
 
   const filteredCards = useMemo(() => {
     const q = filters.query.trim().toLowerCase();
     return cards.filter(card => {
       if (filters.producer && card.producer !== filters.producer) return false;
       if (filters.carrier && card.carrier !== filters.carrier) return false;
-      if (filters.policyType && card.policyType !== filters.policyType) return false;
+      if (filters.policyType && !normalizePolicyTypes(card).includes(filters.policyType)) return false;
       if (filters.finalStatus && card.finalStatus !== filters.finalStatus) return false;
       if (!q) return true;
-      return [card.clientName, card.producer, card.policyType, card.carrier, card.stage, card.finalStatus]
+      return [card.clientName, card.producer, ...normalizePolicyTypes(card), card.carrier, card.stage, card.finalStatus]
         .some(value => String(value || '').toLowerCase().includes(q));
     });
   }, [cards, filters]);
@@ -218,7 +225,7 @@ export default function OperationsPipeline({ people = [] }) {
   }
 
   function openEdit(card) {
-    setForm({ ...EMPTY_CARD, ...card });
+    setForm({ ...EMPTY_CARD, ...card, policyTypes: normalizePolicyTypes(card) });
     setEditingCard(card);
     setModalMode('edit');
     setError('');
@@ -243,8 +250,9 @@ export default function OperationsPipeline({ people = [] }) {
     await loadCards();
   }
 
-  async function moveCard(card, stage, finalStatus) {
-    if (stage === 'Archived' && !finalStatus && card.stage !== 'Archived') {
+  async function moveCard(card, stage) {
+    if (!stage || stage === card.stage) return;
+    if (stage === 'Archived' && !card.finalStatus && card.stage !== 'Archived') {
       openEdit({ ...card, stage: 'Archived', finalStatus: '' });
       setError('Final Status is required when archiving.');
       return;
@@ -254,7 +262,7 @@ export default function OperationsPipeline({ people = [] }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         stage,
-        finalStatus: stage === 'Archived' ? (finalStatus || card.finalStatus) : '',
+        finalStatus: stage === 'Archived' ? card.finalStatus : '',
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -328,7 +336,6 @@ export default function OperationsPipeline({ people = [] }) {
                     key={card.id}
                     card={card}
                     stages={stages}
-                    finalStatuses={finalStatuses}
                     onMove={moveCard}
                     onEdit={openEdit}
                   />
@@ -348,6 +355,7 @@ export default function OperationsPipeline({ people = [] }) {
           people={people}
           stages={stages}
           finalStatuses={finalStatuses}
+          policyTypes={policyTypes}
           onSave={saveForm}
           onCancel={() => {
             setModalMode(null);

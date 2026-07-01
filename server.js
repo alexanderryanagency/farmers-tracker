@@ -167,6 +167,18 @@ const OPERATIONS_FINAL_STATUSES = [
   'Other',
 ];
 
+const OPERATIONS_POLICY_TYPES = [
+  'Home',
+  'Auto',
+  'Life',
+  'Umbrella',
+  'Renters',
+  'Condo',
+  'Landlord',
+  'Manufactured Home',
+  'Other',
+];
+
 function getNewConvPoints(count) {
   const n = Number(count) || 0;
   if (n >= 4) return 20;
@@ -1235,10 +1247,20 @@ function cleanOperationsPipelineCard(input, existing = {}) {
     ? input.stage
     : existing.stage || 'Sold';
   const finalStatus = String(input.finalStatus ?? existing.finalStatus ?? '').trim();
+  const rawPolicyTypes = Array.isArray(input.policyTypes)
+    ? input.policyTypes
+    : Array.isArray(existing.policyTypes)
+      ? existing.policyTypes
+      : [input.policyType ?? existing.policyType].filter(Boolean);
+  const policyTypes = [...new Set(rawPolicyTypes
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  )];
   return {
     clientName: String(input.clientName ?? existing.clientName ?? '').trim(),
     producer: String(input.producer ?? existing.producer ?? '').trim(),
-    policyType: String(input.policyType ?? existing.policyType ?? '').trim(),
+    policyTypes,
+    policyType: policyTypes[0] || '',
     carrier: String(input.carrier ?? existing.carrier ?? '').trim(),
     effectiveDate: String(input.effectiveDate ?? existing.effectiveDate ?? '').trim(),
     stage,
@@ -1249,7 +1271,7 @@ function cleanOperationsPipelineCard(input, existing = {}) {
 function validateOperationsPipelineCard(card) {
   if (!card.clientName) return 'Client Name is required.';
   if (!card.producer) return 'Producer is required.';
-  if (!card.policyType) return 'Policy Type is required.';
+  if (!Array.isArray(card.policyTypes) || card.policyTypes.length === 0) return 'At least one Policy Type is required.';
   if (!card.carrier) return 'Carrier is required.';
   if (!card.effectiveDate) return 'Effective Date is required.';
   if (!OPERATIONS_PIPELINE_STAGES.includes(card.stage)) return 'Current Stage is invalid.';
@@ -1264,7 +1286,8 @@ app.get('/api/operations-pipeline', (req, res) => {
   res.json({
     stages: OPERATIONS_PIPELINE_STAGES,
     finalStatuses: OPERATIONS_FINAL_STATUSES,
-    cards: store.getOperationsPipelineCards(),
+    policyTypes: OPERATIONS_POLICY_TYPES,
+    cards: store.getOperationsPipelineCards().map(card => cleanOperationsPipelineCard(card, card)),
   });
 });
 
