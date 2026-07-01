@@ -7,7 +7,6 @@ process.on('unhandledRejection', (reason) => {
 });
 
 console.log('Starting server — Node', process.version);
-console.log('ANTHROPIC_API_KEY length:', (process.env.ANTHROPIC_API_KEY || '').length);
 
 const express = require('express');
 const { createServer } = require('http');
@@ -18,14 +17,14 @@ const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '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';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ZAPIER_NOTES_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ykpdtv/';
 const ZAPIER_TASKS_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4yknjqy/';
 const ZAPIER_EMAIL_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ykv036/';
 const ZAPIER_TEXT_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ywuw56/';
 const ZAPIER_PULSE_EMAIL_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4o3v1sj/';
 const ALEXANDER_EMAIL = 'arb@alexanderryanagency.com';
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
 
 const AZ_BASE_URL = 'https://app.agencyzoom.com/v1/api';
 
@@ -1565,6 +1564,10 @@ app.post('/api/generate', async (req, res) => {
   const producerEmail = getActiveProducerEmail(producer);
   if (!producerEmail) {
     return res.status(400).json({ error: 'Producer must be an active team member.' });
+  }
+  if (!anthropic) {
+    console.error('Server missing ANTHROPIC_API_KEY');
+    return res.status(500).json({ error: 'Server missing ANTHROPIC_API_KEY' });
   }
 
 
