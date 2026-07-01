@@ -55,6 +55,21 @@ function prettyDate(date) {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function getStageAgeLabel(card) {
+  const source = card.stageEnteredAt || card.createdAt || card.effectiveDate;
+  if (!source) return 'Today';
+  const parsed = String(source).includes('T') ? new Date(source) : new Date(`${source}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return 'Today';
+  const today = new Date();
+  const start = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.max(0, Math.floor((end - start) / 86400000));
+  if (days === 0) return 'Today';
+  if (days === 1) return '1 day';
+  if (days >= 30) return '30+ days';
+  return `${days} days`;
+}
+
 function PipelineModal({ title, form, setForm, people, stages, finalStatuses, policyTypes, onSave, onCancel, error }) {
   const archived = form.stage === 'Archived';
   const selectedPolicyTypes = normalizePolicyTypes(form);
@@ -141,6 +156,7 @@ function PipelineModal({ title, form, setForm, people, stages, finalStatuses, po
 function OperationsCard({ card, stages, onMove, onEdit }) {
   const stageIndex = stages.indexOf(card.stage);
   const policyTypes = normalizePolicyTypes(card);
+  const ageLabel = getStageAgeLabel(card);
 
   return (
     <article className={`operations-card stage-${stageIndex}`}>
@@ -159,6 +175,7 @@ function OperationsCard({ card, stages, onMove, onEdit }) {
         <span>Effective</span>
         <strong>{prettyDate(card.effectiveDate)}</strong>
       </div>
+      <div className="operations-age-badge">Days in Status: {ageLabel}</div>
       {card.stage === 'Archived' && (
         <div className="operations-final-status">
           <Archive size={13} />

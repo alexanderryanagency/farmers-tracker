@@ -1246,6 +1246,7 @@ function cleanOperationsPipelineCard(input, existing = {}) {
   const stage = OPERATIONS_PIPELINE_STAGES.includes(input.stage)
     ? input.stage
     : existing.stage || 'Sold';
+  const existingStage = OPERATIONS_PIPELINE_STAGES.includes(existing.stage) ? existing.stage : stage;
   const finalStatus = String(input.finalStatus ?? existing.finalStatus ?? '').trim();
   const rawPolicyTypes = Array.isArray(input.policyTypes)
     ? input.policyTypes
@@ -1256,7 +1257,10 @@ function cleanOperationsPipelineCard(input, existing = {}) {
     .map(value => String(value || '').trim())
     .filter(Boolean)
   )];
+  const now = new Date().toISOString();
+  const fallbackEnteredAt = existing.stageEnteredAt || existing.updatedAt || existing.createdAt || existing.effectiveDate || now;
   return {
+    id: existing.id ?? input.id,
     clientName: String(input.clientName ?? existing.clientName ?? '').trim(),
     producer: String(input.producer ?? existing.producer ?? '').trim(),
     policyTypes,
@@ -1265,6 +1269,9 @@ function cleanOperationsPipelineCard(input, existing = {}) {
     effectiveDate: String(input.effectiveDate ?? existing.effectiveDate ?? '').trim(),
     stage,
     finalStatus: stage === 'Archived' ? finalStatus : '',
+    stageEnteredAt: stage === existingStage ? fallbackEnteredAt : now,
+    createdAt: existing.createdAt || input.createdAt,
+    updatedAt: existing.updatedAt || input.updatedAt,
   };
 }
 
