@@ -147,6 +147,26 @@ const AZ_QUOTE_MAPPINGS = {
   'Bristol West|Standard Auto': { carrierId: 186, productLineId: 1 },
 };
 
+const OPERATIONS_PIPELINE_STAGES = [
+  'Sold',
+  'Onboarding',
+  'Needs Signature',
+  'Docs Mailed',
+  'Signed',
+  'Waiting on Payment',
+  'Archived',
+];
+const OPERATIONS_FINAL_STATUSES = [
+  'Active',
+  'Cancelled',
+  'Non-Pay',
+  'Never Signed',
+  'Rewritten',
+  'Transferred',
+  'UW Declined',
+  'Other',
+];
+
 function getNewConvPoints(count) {
   const n = Number(count) || 0;
   if (n >= 4) return 20;
@@ -1208,6 +1228,66 @@ app.get('/api/folio-tasks', (req, res) => {
     }
   }
   res.json(result);
+});
+
+function cleanOperationsPipelineCard(input, existing = {}) {
+  const stage = OPERATIONS_PIPELINE_STAGES.includes(input.stage)
+    ? input.stage
+    : existing.stage || 'Sold';
+  const finalStatus = String(input.finalStatus ?? existing.finalStatus ?? '').trim();
+  return {
+    clientName: String(input.clientName ?? existing.clientName ?? '').trim(),
+    producer: String(input.producer ?? existing.producer ?? '').trim(),
+    policyType: String(input.policyType ?? existing.policyType ?? '').trim(),
+    carrier: String(input.carrier ?? existing.carrier ?? '').trim(),
+    effectiveDate: String(input.effectiveDate ?? existing.effectiveDate ?? '').trim(),
+    stage,
+    finalStatus: stage === 'Archived' ? finalStatus : '',
+  };
+}
+
+function validateOperationsPipelineCard(card) {
+  if (!card.clientName) return 'Client Name is required.';
+  if (!card.producer) return 'Producer is required.';
+  if (!card.policyType) return 'Policy Type is required.';
+  if (!card.carrier) return 'Carrier is required.';
+  if (!card.effectiveDate) return 'Effective Date is required.';
+  if (!OPERATIONS_PIPELINE_STAGES.includes(card.stage)) return 'Current Stage is invalid.';
+  if (card.stage === 'Archived' && !OPERATIONS_FINAL_STATUSES.includes(card.finalStatus)) {
+    return 'Final Status is required when archiving.';
+  }
+  if (card.stage !== 'Archived' && card.finalStatus) return 'Final Status only applies to archived cards.';
+  return null;
+}
+
+app.get('/api/operations-pipeline', (req, res) => {
+  res.json({
+    stages: OPERATIONS_PIPELINE_STAGES,
+    finalStatuses: OPERATIONS_FINAL_STATUSES,
+    cards: store.getOperationsPipelineCards(),
+  });
+});
+
+app.post('/api/operations-pipeline', (req, res) => {
+  const card = cleanOperationsPipelineCard(req.body || {});
+  const error = validateOperationsPipelineCard(card);
+  if (error) return res.status(400).json({ error });
+  const saved = store.addOperationsPipelineCard(card);
+  io.emit('refresh');
+  res.json(saved);
+});
+
+app.patch('/api/operations-pipeline/:id', (req, res) => {
+  const existing = store
+    .getOperationsPipelineCards()
+    .find(card => String(card.id) === String(req.params.id));
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const next = cleanOperationsPipelineCard({ ...existing, ...(req.body || {}) }, existing);
+  const error = validateOperationsPipelineCard(next);
+  if (error) return res.status(400).json({ error });
+  const updated = store.updateOperationsPipelineCard(req.params.id, next);
+  io.emit('refresh');
+  res.json(updated);
 });
 
 // ── AgencyZoom routes ──────────────────────────────────────────────────────

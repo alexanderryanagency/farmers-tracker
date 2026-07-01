@@ -17,6 +17,7 @@ let state = {
   conversations: [],
   coachingNotes: [],
   pulseSchedule: {},
+  operationsPipeline: [],
 };
 
 if (fs.existsSync(FILE)) {
@@ -27,6 +28,7 @@ if (fs.existsSync(FILE)) {
     if (!state.conversations) state.conversations = [];
     if (!state.feedback) state.feedback = {};
     if (!state.pulseSchedule) state.pulseSchedule = {};
+    if (!state.operationsPipeline) state.operationsPipeline = [];
   } catch {}
 }
 
@@ -172,6 +174,31 @@ module.exports = {
     if (!state.pulseSchedule) state.pulseSchedule = {};
     state.pulseSchedule[type] = date;
     save();
+  },
+
+  getOperationsPipelineCards() {
+    return state.operationsPipeline || [];
+  },
+  addOperationsPipelineCard(card) {
+    if (!state.operationsPipeline) state.operationsPipeline = [];
+    const now = new Date().toISOString();
+    const saved = {
+      ...card,
+      id: Date.now() + Math.random(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    state.operationsPipeline.unshift(saved);
+    save();
+    return saved;
+  },
+  updateOperationsPipelineCard(id, updates) {
+    if (!state.operationsPipeline) state.operationsPipeline = [];
+    const card = state.operationsPipeline.find(item => String(item.id) === String(id));
+    if (!card) return null;
+    Object.assign(card, updates, { updatedAt: new Date().toISOString() });
+    save();
+    return card;
   },
 
   setHabit() {},

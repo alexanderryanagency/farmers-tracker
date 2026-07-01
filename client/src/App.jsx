@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { LayoutDashboard, Zap, CheckSquare, BarChart2, MessageSquare, Trophy } from 'lucide-react';
+import { LayoutDashboard, Zap, CheckSquare, ClipboardList, BarChart2, MessageSquare, Trophy } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import CommandCenter from './components/CommandCenter';
 import SendSuite from './components/SendSuite';
 import ActivityTracker from './components/ActivityTracker';
+import OperationsPipeline from './components/OperationsPipeline';
 import MyStats from './components/MyStats';
 import CoachsCorner from './components/CoachsCorner';
 import TrophyCase from './components/TrophyCase';
@@ -16,6 +17,7 @@ const MOBILE_NAV = [
   { id: 'command',  label: 'Home',     Icon: LayoutDashboard },
   { id: 'send',     label: 'Send',     Icon: Zap             },
   { id: 'activity', label: 'Activity', Icon: CheckSquare     },
+  { id: 'operations', label: 'Ops',     Icon: ClipboardList   },
   { id: 'stats',    label: 'Stats',    Icon: BarChart2       },
   { id: 'coach',    label: 'Coach',    Icon: MessageSquare   },
   { id: 'trophy',   label: 'Trophy',   Icon: Trophy          },
@@ -144,6 +146,7 @@ export default function App() {
         {activeTab === 'command'  && <CommandCenter weekData={weekData} kpiData={kpiData} people={activePeople} theme={theme} />}
         {activeTab === 'send'     && <SendSuite people={activePeople} currentUser={currentUser} />}
         {activeTab === 'activity' && <ActivityTracker people={activePeople} currentUser={currentUser} today={today} onRefresh={fetchData} kpiData={kpiData} refreshTick={refreshTick} weekData={weekData} />}
+        {activeTab === 'operations' && <OperationsPipeline people={activePeople} />}
         {activeTab === 'stats'    && <MyStats kpiData={kpiData} people={activePeople} />}
         {activeTab === 'coach'    && <CoachsCorner people={activePeople} />}
         {activeTab === 'trophy'   && <TrophyCase weekData={weekData} kpiData={kpiData} people={activePeople} />}
