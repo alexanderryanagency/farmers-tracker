@@ -818,20 +818,29 @@ app.get('/api/week', (req, res) => {
 
   const data = {};
   for (const person of PERSONS) {
+    const tasks = {};
     const wins = {};
     const challenges = {};
     const feedback = {};
+    const clients = {};
+    const saleDetails = {};
 
     for (const date of weekDates) {
+      tasks[date] = store.getTasks(person, date);
       wins[date] = store.getWin(person, date);
       challenges[date] = store.getChallenge(person, date);
       feedback[date] = store.getFeedback(person, date);
+      clients[date] = store.getClients(person, date);
+      saleDetails[date] = store.getSaleDetails(person, date);
     }
 
     data[person] = {
+      tasks,
       wins,
       challenges,
       feedback,
+      clients,
+      saleDetails,
       points: calcWeeklyPoints(person, weekDates),
     };
   }
@@ -976,7 +985,68 @@ app.get('/api/kpi', (req, res) => {
 });
 
 app.post('/api/task', (req, res) => {
-  res.status(410).json({ error: 'Activity Tracker tasks have been removed from this workflow' });
+  const { person, taskId, date, completed, clientName, premium, numPolicies, numHouseholds, saleType } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
+  store.setTask(person, taskId, date, completed);
+  const shouldLogActivity = isDailyActivityLogTask(taskId);
+
+  if (completed) {
+    store.setClientName(person, taskId, date, clientName);
+    const now = new Date();
+    const isSaleTask = /^sale_\d+$/.test(taskId);
+    const isLifeAppBackTask = /^life_app_back_\d+$/.test(taskId);
+    const normalizedSaleType = isSaleTask ? (saleType || 'new_household') : saleType;
+    const householdCount = isSaleTask && normalizedSaleType === 'new_household'
+      ? 1
+      : Number(numHouseholds) || 0;
+    const entry = {
+      person,
+      personName: PERSON_NAMES[person] || person,
+      taskId,
+      taskLabel: TASK_LABELS[taskId] || taskId,
+      activityType: getActivityType(taskId),
+      clientName: clientName || '',
+      date,
+      time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: now.getTime(),
+      points: getTaskPoints(taskId, completed),
+    };
+    if (premium      != null) entry.premium      = premium;
+    if (numPolicies  != null) entry.numPolicies  = numPolicies;
+    if (isSaleTask || isLifeAppBackTask || numHouseholds != null) entry.numHouseholds = householdCount;
+    if (normalizedSaleType) entry.saleType = normalizedSaleType;
+    if (isSaleTask) entry.newHousehold = normalizedSaleType === 'new_household';
+    if (shouldLogActivity) store.addLogEntry(entry);
+
+    if (isSaleTask || isLifeAppBackTask || taskId === 'monoline' || taskId === 'bundle') {
+      store.setSaleDetails(person, taskId, date, {
+        premium,
+        numPolicies,
+        numHouseholds: householdCount,
+        saleType: normalizedSaleType,
+      });
+    }
+  } else if (!completed) {
+    store.setClientName(person, taskId, date, null);
+    const isRevenueTask =
+      /^sale_\d+$/.test(taskId) ||
+      /^life_app_back_\d+$/.test(taskId) ||
+      taskId === 'monoline' ||
+      taskId === 'bundle';
+    if (isRevenueTask) {
+      store.setSaleDetails(person, taskId, date, null);
+    }
+    if (shouldLogActivity) {
+      const log = store.getLog();
+      const match = log
+        .filter(e => e.person === person && e.date === date && e.taskId === taskId)
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+      if (match) store.deleteLogEntry(match.id);
+    }
+  }
+
+  io.emit('refresh');
+  res.json({ success: true });
 });
 
 app.post('/api/sale', (req, res) => {
@@ -1070,7 +1140,25 @@ app.delete('/api/log/:id', (req, res) => {
 });
 
 app.patch('/api/activity-correction/conversations', (req, res) => {
-  res.status(410).json({ error: 'Activity Tracker tasks have been removed from this workflow' });
+  if (!isAdminCorrection(req)) return res.status(403).json({ error: 'Admin access required' });
+  const { person, date } = req.body;
+  const count = Number(req.body.count);
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isInteger(count) || count < 0 || count > 50) {
+    return res.status(400).json({ error: 'Valid date and conversation count required' });
+  }
+
+  const current = Number(store.getTasks(person, date).new_conv) || 0;
+  if (count < current) {
+    const entries = store.getLog()
+      .filter(entry => entry.person === person && entry.date === date && entry.taskId === 'new_conv')
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    entries.slice(0, current - count).forEach(entry => store.deleteLogEntry(entry.id));
+  }
+  store.setTask(person, 'new_conv', date, count);
+  if (count === 0) store.setClientName(person, 'new_conv', date, null);
+  io.emit('refresh');
+  res.json({ success: true, count, points: getNewConvPoints(count) });
 });
 
 // Coaching notes
