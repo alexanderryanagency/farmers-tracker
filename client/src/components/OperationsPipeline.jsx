@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, Edit3, Plus, Search, X } from 'lucide-react';
+import { Archive, Download, Edit3, Plus, Search, X } from 'lucide-react';
 
 const DEFAULT_STAGES = [
   'Sold',
@@ -30,7 +30,22 @@ const EMPTY_CARD = {
   effectiveDate: '',
   stage: 'Sold',
   finalStatus: '',
+  notes: '',
 };
+
+const EMPTY_REPORT_FILTERS = { query: '', producer: '', carrier: '', policyType: '', stage: '', finalStatus: '' };
+const REPORT_COLUMNS = [
+  ['clientName', 'Client Name'],
+  ['producer', 'Producer'],
+  ['policyTypes', 'Policy Type'],
+  ['carrier', 'Carrier'],
+  ['stage', 'Current Pipeline Status'],
+  ['finalStatus', 'Final Status'],
+  ['effectiveDate', 'Effective Date'],
+  ['daysInStatus', 'Days in Current Status'],
+  ['notes', 'Notes'],
+  ['updatedAt', 'Last Updated'],
+];
 
 const POLICY_TYPES = ['Home', 'Auto', 'Life', 'Umbrella', 'Renters', 'Condo', 'Landlord', 'Manufactured Home', 'Other'];
 const CARRIERS = ['Farmers', 'Bristol West', 'Foremost', 'Other'];
@@ -68,6 +83,36 @@ function getStageAgeLabel(card) {
   if (days === 1) return '1 day';
   if (days >= 30) return '30+ days';
   return `${days} days`;
+}
+
+function getStageAgeDays(card) {
+  const source = card.stageEnteredAt || card.createdAt || card.effectiveDate;
+  if (!source) return 0;
+  const parsed = String(source).includes('T') ? new Date(source) : new Date(`${source}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return 0;
+  const today = new Date();
+  const start = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.max(0, Math.floor((end - start) / 86400000));
+}
+
+function prettyDateTime(value) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function csvEscape(value) {
+  const text = String(value ?? '');
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function reportValue(card, key) {
+  if (key === 'policyTypes') return normalizePolicyTypes(card).join(', ');
+  if (key === 'daysInStatus') return getStageAgeDays(card);
+  if (key === 'notes') return card.notes || '';
+  return card[key] || '';
 }
 
 function PipelineModal({ title, form, setForm, people, stages, finalStatuses, policyTypes, onSave, onCancel, error }) {
@@ -142,12 +187,161 @@ function PipelineModal({ title, form, setForm, people, stages, finalStatuses, po
               </select>
             </label>
           )}
+          <label className="operations-full-field">
+            <span>Notes</span>
+            <textarea className="modal-textarea operations-notes-input" value={form.notes || ''} onChange={event => setForm({ ...form, notes: event.target.value })} />
+          </label>
         </div>
 
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onCancel}>Cancel</button>
           <button className="modal-confirm" onClick={onSave}>Save</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function OperationsTotals({ cards, stages }) {
+  const totals = [
+    ['Total Policies', cards.length],
+    ['Active', cards.filter(card => card.finalStatus === 'Active' || card.stage !== 'Archived').length],
+    ['Cancelled', cards.filter(card => card.finalStatus === 'Cancelled').length],
+    ['Transferred', cards.filter(card => card.finalStatus === 'Transferred').length],
+    ...stages.filter(stage => stage !== 'Sold').map(stage => [stage, cards.filter(card => card.stage === stage).length]),
+  ];
+
+  return (
+    <div className="operations-report-totals">
+      {totals.map(([label, value]) => (
+        <div className="operations-report-total" key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OperationsReport({
+  cards,
+  stages,
+  finalStatuses,
+  policyTypes,
+  producerOptions,
+  carrierOptions,
+  filters,
+  sort,
+  onFilter,
+  onSort,
+  onEdit,
+  onPatch,
+  onExport,
+}) {
+  return (
+    <div className="operations-report-view">
+      <OperationsTotals cards={cards} stages={stages} />
+      <div className="operations-report-toolbar">
+        <label className="operations-search">
+          <Search size={16} />
+          <input value={filters.query} onChange={event => onFilter('query', event.target.value)} placeholder="Search report" />
+        </label>
+        <select value={filters.producer} onChange={event => onFilter('producer', event.target.value)}>
+          <option value="">All producers</option>
+          {producerOptions.map(option => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select value={filters.carrier} onChange={event => onFilter('carrier', event.target.value)}>
+          <option value="">All carriers</option>
+          {carrierOptions.map(option => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select value={filters.policyType} onChange={event => onFilter('policyType', event.target.value)}>
+          <option value="">All policy types</option>
+          {policyTypes.map(option => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select value={filters.stage} onChange={event => onFilter('stage', event.target.value)}>
+          <option value="">All statuses</option>
+          {stages.map(option => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select value={filters.finalStatus} onChange={event => onFilter('finalStatus', event.target.value)}>
+          <option value="">All final statuses</option>
+          {finalStatuses.map(option => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <button className="operations-primary-btn" onClick={onExport}>
+          <Download size={16} />
+          Export CSV
+        </button>
+      </div>
+      <div className="operations-report-table-wrap">
+        <table className="operations-report-table">
+          <thead>
+            <tr>
+              {REPORT_COLUMNS.map(([key, label]) => (
+                <th key={key}>
+                  <button type="button" onClick={() => onSort(key)}>
+                    {label}
+                    {sort.key === key && <span>{sort.direction === 'asc' ? ' ↑' : ' ↓'}</span>}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map(card => (
+              <tr key={card.id}>
+                <td>{card.clientName}</td>
+                <td>{card.producer}</td>
+                <td>
+                  <select value={normalizePolicyTypes(card)[0] || ''} onChange={event => onPatch(card, { policyTypes: event.target.value ? [event.target.value] : [] })}>
+                    <option value="">Select</option>
+                    {policyTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={card.carrier || ''} onChange={event => onPatch(card, { carrier: event.target.value })}>
+                    <option value="">Select</option>
+                    {carrierOptions.map(carrier => <option key={carrier} value={carrier}>{carrier}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    value={card.stage || ''}
+                    onChange={event => {
+                      const nextStage = event.target.value;
+                      if (nextStage === 'Archived' && !card.finalStatus) {
+                        onEdit({ ...card, stage: 'Archived', finalStatus: '' });
+                        return;
+                      }
+                      onPatch(card, { stage: nextStage, finalStatus: nextStage === 'Archived' ? card.finalStatus : '' });
+                    }}
+                  >
+                    {stages.map(stage => <option key={stage} value={stage}>{stage}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={card.finalStatus || ''} onChange={event => onPatch(card, { finalStatus: event.target.value })} disabled={card.stage !== 'Archived'}>
+                    <option value="">None</option>
+                    {finalStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <input type="date" value={card.effectiveDate || ''} onChange={event => onPatch(card, { effectiveDate: event.target.value })} />
+                </td>
+                <td>{getStageAgeLabel(card)}</td>
+                <td>
+                  <button className={`operations-notes-btn${card.notes ? ' has-notes' : ''}`} onClick={() => onEdit(card)}>
+                    {card.notes ? 'Notes' : 'Add'}
+                  </button>
+                </td>
+                <td>{prettyDateTime(card.updatedAt)}</td>
+              </tr>
+            ))}
+            {cards.length === 0 && (
+              <tr>
+                <td className="operations-report-empty" colSpan={REPORT_COLUMNS.length}>No records match these filters.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -197,7 +391,10 @@ export default function OperationsPipeline({ people = [] }) {
   const [stages, setStages] = useState(DEFAULT_STAGES);
   const [finalStatuses, setFinalStatuses] = useState(DEFAULT_FINAL_STATUSES);
   const [policyTypes, setPolicyTypes] = useState(POLICY_TYPES);
+  const [viewMode, setViewMode] = useState('kanban');
   const [filters, setFilters] = useState({ query: '', producer: '', carrier: '', policyType: '', finalStatus: '' });
+  const [reportFilters, setReportFilters] = useState(EMPTY_REPORT_FILTERS);
+  const [reportSort, setReportSort] = useState({ key: 'updatedAt', direction: 'desc' });
   const [modalMode, setModalMode] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const [form, setForm] = useState(EMPTY_CARD);
@@ -233,6 +430,28 @@ export default function OperationsPipeline({ people = [] }) {
         .some(value => String(value || '').toLowerCase().includes(q));
     });
   }, [cards, filters]);
+
+  const reportCards = useMemo(() => {
+    const q = reportFilters.query.trim().toLowerCase();
+    const filtered = cards.filter(card => {
+      if (reportFilters.producer && card.producer !== reportFilters.producer) return false;
+      if (reportFilters.carrier && card.carrier !== reportFilters.carrier) return false;
+      if (reportFilters.policyType && !normalizePolicyTypes(card).includes(reportFilters.policyType)) return false;
+      if (reportFilters.stage && card.stage !== reportFilters.stage) return false;
+      if (reportFilters.finalStatus && card.finalStatus !== reportFilters.finalStatus) return false;
+      if (!q) return true;
+      return [card.clientName, card.producer, ...normalizePolicyTypes(card), card.carrier, card.stage, card.finalStatus, card.notes]
+        .some(value => String(value || '').toLowerCase().includes(q));
+    });
+    return [...filtered].sort((a, b) => {
+      const aValue = reportValue(a, reportSort.key);
+      const bValue = reportValue(b, reportSort.key);
+      const result = typeof aValue === 'number' && typeof bValue === 'number'
+        ? aValue - bValue
+        : String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+      return reportSort.direction === 'asc' ? result : -result;
+    });
+  }, [cards, reportFilters, reportSort]);
 
   function openCreate() {
     setForm(EMPTY_CARD);
@@ -294,6 +513,56 @@ export default function OperationsPipeline({ people = [] }) {
     setFilters(current => ({ ...current, [key]: value }));
   }
 
+  function updateReportFilter(key, value) {
+    setReportFilters(current => ({ ...current, [key]: value }));
+  }
+
+  function updateReportSort(key) {
+    setReportSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }
+
+  async function patchCard(card, updates) {
+    const payload = { ...card, ...updates };
+    const response = await fetch(`/api/operations-pipeline/${card.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(data.error || 'Unable to update record');
+      return;
+    }
+    setCards(current => current.map(item => String(item.id) === String(data.id) ? data : item));
+  }
+
+  function exportReportCsv() {
+    const headers = REPORT_COLUMNS.map(([, label]) => label);
+    const rows = reportCards.map(card => [
+      card.clientName,
+      card.producer,
+      normalizePolicyTypes(card).join('; '),
+      card.carrier,
+      card.stage,
+      card.finalStatus,
+      card.effectiveDate,
+      getStageAgeLabel(card),
+      card.notes || '',
+      card.updatedAt,
+    ]);
+    const csv = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `operations-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="operations-page page">
       <div className="operations-header">
@@ -307,62 +576,87 @@ export default function OperationsPipeline({ people = [] }) {
         </button>
       </div>
 
-      <div className="operations-filters">
-        <label className="operations-search">
-          <Search size={16} />
-          <input value={filters.query} onChange={event => updateFilter('query', event.target.value)} placeholder="Search active or archived cards" />
-        </label>
-        <select value={filters.producer} onChange={event => updateFilter('producer', event.target.value)}>
-          <option value="">All producers</option>
-          {producerOptions.map(option => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <select value={filters.carrier} onChange={event => updateFilter('carrier', event.target.value)}>
-          <option value="">All carriers</option>
-          {carrierOptions.map(option => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <select value={filters.policyType} onChange={event => updateFilter('policyType', event.target.value)}>
-          <option value="">All policy types</option>
-          {policyTypeOptions.map(option => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <select value={filters.finalStatus} onChange={event => updateFilter('finalStatus', event.target.value)}>
-          <option value="">All final statuses</option>
-          {finalStatuses.map(option => <option key={option} value={option}>{option}</option>)}
-        </select>
-        {(filters.query || filters.producer || filters.carrier || filters.policyType || filters.finalStatus) && (
-          <button className="operations-clear-btn" onClick={() => setFilters({ query: '', producer: '', carrier: '', policyType: '', finalStatus: '' })}>
-            <X size={14} />
-            Clear
-          </button>
-        )}
+      <div className="operations-view-toggle" role="tablist" aria-label="Operations views">
+        <button className={viewMode === 'kanban' ? 'active' : ''} onClick={() => setViewMode('kanban')}>Kanban View</button>
+        <button className={viewMode === 'report' ? 'active' : ''} onClick={() => setViewMode('report')}>Operations Report</button>
       </div>
+
+      {viewMode === 'kanban' && (
+        <div className="operations-filters">
+          <label className="operations-search">
+            <Search size={16} />
+            <input value={filters.query} onChange={event => updateFilter('query', event.target.value)} placeholder="Search active or archived cards" />
+          </label>
+          <select value={filters.producer} onChange={event => updateFilter('producer', event.target.value)}>
+            <option value="">All producers</option>
+            {producerOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+          <select value={filters.carrier} onChange={event => updateFilter('carrier', event.target.value)}>
+            <option value="">All carriers</option>
+            {carrierOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+          <select value={filters.policyType} onChange={event => updateFilter('policyType', event.target.value)}>
+            <option value="">All policy types</option>
+            {policyTypeOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+          <select value={filters.finalStatus} onChange={event => updateFilter('finalStatus', event.target.value)}>
+            <option value="">All final statuses</option>
+            {finalStatuses.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+          {(filters.query || filters.producer || filters.carrier || filters.policyType || filters.finalStatus) && (
+            <button className="operations-clear-btn" onClick={() => setFilters({ query: '', producer: '', carrier: '', policyType: '', finalStatus: '' })}>
+              <X size={14} />
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {error && !modalMode && <div className="operations-error">{error}</div>}
 
-      <div className="operations-board">
-        {stages.map((stage, index) => {
-          const stageCards = filteredCards.filter(card => card.stage === stage);
-          return (
-            <section key={stage} className={`operations-column column-${index}`}>
-              <div className="operations-column-header">
-                <span>{stage}</span>
-                <strong>{stageCards.length}</strong>
-              </div>
-              <div className="operations-column-body">
-                {stageCards.map(card => (
-                  <OperationsCard
-                    key={card.id}
-                    card={card}
-                    stages={stages}
-                    onMove={moveCard}
-                    onEdit={openEdit}
-                  />
-                ))}
-                {stageCards.length === 0 && <div className="operations-empty">No cards</div>}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      {viewMode === 'kanban' ? (
+        <div className="operations-board">
+          {stages.map((stage, index) => {
+            const stageCards = filteredCards.filter(card => card.stage === stage);
+            return (
+              <section key={stage} className={`operations-column column-${index}`}>
+                <div className="operations-column-header">
+                  <span>{stage}</span>
+                  <strong>{stageCards.length}</strong>
+                </div>
+                <div className="operations-column-body">
+                  {stageCards.map(card => (
+                    <OperationsCard
+                      key={card.id}
+                      card={card}
+                      stages={stages}
+                      onMove={moveCard}
+                      onEdit={openEdit}
+                    />
+                  ))}
+                  {stageCards.length === 0 && <div className="operations-empty">No cards</div>}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <OperationsReport
+          cards={reportCards}
+          stages={stages}
+          finalStatuses={finalStatuses}
+          policyTypes={policyTypeOptions}
+          producerOptions={producerOptions}
+          carrierOptions={carrierOptions}
+          filters={reportFilters}
+          sort={reportSort}
+          onFilter={updateReportFilter}
+          onSort={updateReportSort}
+          onEdit={openEdit}
+          onPatch={patchCard}
+          onExport={exportReportCsv}
+        />
+      )}
 
       {modalMode && (
         <PipelineModal

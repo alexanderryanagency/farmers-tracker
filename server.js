@@ -1146,6 +1146,7 @@ function cleanOperationsPipelineCard(input, existing = {}) {
     effectiveDate: String(input.effectiveDate ?? existing.effectiveDate ?? '').trim(),
     stage,
     finalStatus: stage === 'Archived' ? finalStatus : '',
+    notes: String(input.notes ?? existing.notes ?? ''),
     stageEnteredAt: stage === existingStage ? fallbackEnteredAt : now,
     createdAt: existing.createdAt || input.createdAt,
     updatedAt: existing.updatedAt || input.updatedAt,

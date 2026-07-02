@@ -1597,6 +1597,153 @@ html, body, #root {
   padding: 0 11px;
   color: var(--muted);
 }
+.operations-view-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 4px;
+}
+.operations-view-toggle button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  padding: 0 12px;
+}
+.operations-view-toggle button.active {
+  background: var(--gdim);
+  color: var(--gold);
+}
+.operations-report-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.operations-report-totals {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(110px, 1fr));
+  gap: 8px;
+}
+.operations-report-total {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 9px 10px;
+}
+.operations-report-total span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.operations-report-total strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+.operations-report-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(120px, 1fr)) auto;
+  gap: 8px;
+  align-items: center;
+}
+.operations-report-toolbar select {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 0 10px;
+  font-weight: 700;
+}
+.operations-report-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+  background: rgba(255,255,255,0.025);
+}
+.operations-report-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.operations-report-table th,
+.operations-report-table td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 8px 9px;
+  text-align: left;
+  vertical-align: middle;
+}
+.operations-report-table th {
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.operations-report-table th button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 950;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.operations-report-table td {
+  color: var(--text);
+  background: rgba(255,255,255,0.012);
+}
+.operations-report-table select,
+.operations-report-table input[type="date"] {
+  width: 100%;
+  min-height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-weight: 700;
+  padding: 0 7px;
+}
+.operations-notes-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 0 10px;
+}
+.operations-notes-btn.has-notes {
+  color: var(--gold);
+  background: var(--gdim);
+}
+.operations-notes-input {
+  min-height: 120px;
+  resize: vertical;
+}
+.operations-report-empty {
+  text-align: center !important;
+  color: var(--muted) !important;
+  padding: 24px !important;
+}
 .operations-board {
   flex: 1;
   min-height: 0;
@@ -1901,7 +2048,11 @@ html, body, #root {
   .operations-page { padding: 16px 14px 20px; }
   .operations-header { align-items: stretch; flex-direction: column; }
   .operations-primary-btn { width: 100%; }
+  .operations-view-toggle { width: 100%; }
+  .operations-view-toggle button { flex: 1; }
   .operations-filters { grid-template-columns: 1fr; }
+  .operations-report-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operations-report-toolbar { grid-template-columns: 1fr; }
   .operations-board { grid-template-columns: repeat(7, minmax(240px, 82vw)); }
   .operations-column { min-height: 360px; }
   .operations-form-grid { grid-template-columns: 1fr; }
