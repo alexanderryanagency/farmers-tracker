@@ -245,9 +245,19 @@ function isActivePerson(person) {
   return ACTIVE_PERSONS.includes(person);
 }
 
-function isAdminCorrection(req) {
-  const actor = req.body?.actor || {};
+function isAdminActor(actor = {}) {
   return actor.role === 'admin' && String(actor.email || '').toLowerCase() === 'arb@alexanderryanagency.com';
+}
+
+function getRequestActor(req) {
+  return req.body?.actor || {
+    role: req.get('x-user-role'),
+    email: req.get('x-user-email'),
+  };
+}
+
+function isAdminCorrection(req) {
+  return isAdminActor(getRequestActor(req));
 }
 
 function isInactiveProducer(value) {
@@ -996,6 +1006,19 @@ app.post('/api/daily', (req, res) => {
   if (challenge !== undefined) store.setChallenge(person, date, challenge);
   if (feedback !== undefined) store.setFeedback(person, date, feedback);
   res.json({ success: true });
+});
+
+app.post('/api/admin/data/export', (req, res) => {
+  if (!isAdminActor(getRequestActor(req))) return res.status(403).json({ error: 'Admin access required' });
+  const filename = `farmers-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.json({
+    exportedAt: new Date().toISOString(),
+    dataFile: store.getDataFilePath(),
+    backupDir: store.getBackupDir(),
+    summary: store.getDataSummary(),
+    data: store.exportData(),
+  });
 });
 
 app.get('/api/log', (req, res) => {
