@@ -22,6 +22,29 @@ const IS_RAILWAY = Boolean(
 );
 const REQUIRED_RAILWAY_DATA_FILE = '/data/data.json';
 
+function safeDirectoryListing(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch (err) {
+    return `[unreadable: ${err.message}]`;
+  }
+}
+
+function logStartupStorageDiagnostics() {
+  const dataDir = '/data';
+  const dataDirExists = fs.existsSync(dataDir);
+  console.log('[DataStore] Startup storage diagnostics:', {
+    DATA_FILE: process.env.DATA_FILE || '(not set)',
+    resolvedDataFile: FILE,
+    isRailway: IS_RAILWAY,
+    railwayVolumeMountPath: process.env.RAILWAY_VOLUME_MOUNT_PATH || '(not set)',
+    dataDirExists,
+    dataDirContents: dataDirExists ? safeDirectoryListing(dataDir) : '(missing)',
+    dataFileExists: fs.existsSync(REQUIRED_RAILWAY_DATA_FILE),
+    cwd: process.cwd(),
+  });
+}
+
 function assertSafeProductionStorage() {
   if (!IS_RAILWAY) return;
   if (process.env.DATA_FILE !== REQUIRED_RAILWAY_DATA_FILE) {
@@ -75,6 +98,7 @@ function dataSummary(data = state) {
   };
 }
 
+logStartupStorageDiagnostics();
 assertSafeProductionStorage();
 
 if (fs.existsSync(FILE)) {
