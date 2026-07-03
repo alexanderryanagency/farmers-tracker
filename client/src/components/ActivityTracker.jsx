@@ -13,6 +13,7 @@ const PRODUCER_TASK_GROUPS = [
     tasks: [
       { id: 'new_conv', label: 'New Conversations', points: 0, readOnly: true },
       { id: 'followup_dials', label: '30 Follow-Up Dials', points: 10 },
+      { baseId: 'renewals_completed', label: 'Renewals Completed + 2 points', points: 2, slots: 3, requiresClient: true },
     ],
   },
   {
@@ -28,7 +29,7 @@ const PRODUCER_TASK_GROUPS = [
     label: 'Sales',
     tasks: [
       { baseId: 'sale', label: 'Sale', points: 20, slots: 3, revenueType: 'sale' },
-      { baseId: 'onboarding_scheduled', label: 'Onboarding Scheduled', points: 5, slots: 3 },
+      { baseId: 'onboarding_scheduled', label: 'Onboarding Scheduled', points: 5, slots: 1 },
       { baseId: 'referral_received', label: 'Referral Received', points: 20, slots: 3 },
     ],
   },
@@ -45,6 +46,7 @@ const DAN_TASKS = [
   { id: 'add_sales_to_onboard', label: 'Add New Sales to Onboard Tab', points: 5 },
   { id: 'got_past_due_payment', label: 'Got Payment from Past Due Policy', points: 10 },
   { id: 'completed_onboarding', label: 'Completed an Onboarding', points: 5 },
+  { baseId: 'renewals_completed', label: 'Renewals Completed + 2 points', points: 2, slots: 3, requiresClient: true },
   { id: 'dan_referral_received', label: 'Referral Received', points: 20 },
   { id: 'cross_sell_opportunity', label: 'Cross-Sell Opportunity', points: 20 },
 ];
@@ -54,6 +56,21 @@ const MISSED_CALL_OPTIONS = [
   { value: 'one', label: 'Missed 1 call', points: 5 },
   { value: 'zero', label: 'Missed zero calls', points: 10 },
 ];
+
+const DAN_CLIENT_DETAIL_TASK_IDS = new Set([
+  'got_past_due_payment',
+  'completed_onboarding',
+  'renewals_completed',
+  'dan_referral_received',
+]);
+
+const DAN_ACTIVITY_REPORT_TASK_IDS = new Set([
+  'completed_onboarding',
+  'dan_referral_received',
+  'cross_sell_opportunity',
+]);
+
+const CROSS_SELL_PRODUCTS = ['Home', 'Auto', 'Life', 'Boat', 'Motorcycle', 'RV'];
 
 function MiniRaceTrack({ weekData, allPeople }) {
   const ranked = [...allPeople]
@@ -105,6 +122,14 @@ function getNewConvPoints(count) {
 
 function getMissedCallsPoints(value) {
   return MISSED_CALL_OPTIONS.find(o => o.value === value)?.points || 0;
+}
+
+function isRenewalTaskId(taskId) {
+  return /^renewals_completed_\d+$/.test(taskId);
+}
+
+function isDanReportActivity(entry) {
+  return DAN_ACTIVITY_REPORT_TASK_IDS.has(entry.taskId) || isRenewalTaskId(entry.taskId);
 }
 
 function getMonday(dateStr) {
@@ -196,6 +221,41 @@ function ClientNameModal({ task, onCancel, onSave }) {
   );
 }
 
+function CrossSellModal({ task, onCancel, onSave }) {
+  const [clientName, setClientName] = useState('');
+  const [product, setProduct] = useState(CROSS_SELL_PRODUCTS[0]);
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div className="modal">
+        <div className="modal-tag">{task.label}</div>
+        <div className="modal-title">Cross-Sell Details</div>
+        <div className="modal-field-label">Client Name</div>
+        <input
+          className="modal-input"
+          type="text"
+          placeholder="Client full name"
+          value={clientName}
+          onChange={e => setClientName(e.target.value)}
+          autoFocus
+        />
+        <div className="modal-field-label">Product</div>
+        <select className="modal-input" value={product} onChange={e => setProduct(e.target.value)}>
+          {CROSS_SELL_PRODUCTS.map(option => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <div className="modal-actions">
+          <button className="modal-cancel" onClick={onCancel}>Cancel</button>
+          <button className="modal-confirm" onClick={() => onSave({ clientName, product })}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActivityCorrectionModal({ entry, onCancel, onSave }) {
   const [clientName, setClientName] = useState(entry.clientName || '');
   const [premium, setPremium] = useState(entry.premium || '');
@@ -226,6 +286,81 @@ function ActivityCorrectionModal({ entry, onCancel, onSave }) {
   );
 }
 
+function formatHistoryDetails(entry) {
+  if (entry.product) return `Product: ${entry.product}`;
+  if (entry.activityType === 'New Conversation' && entry.durationText) return `Duration: ${entry.durationText}`;
+  const pieces = [];
+  if (entry.premium) pieces.push(`$${entry.premium} premium`);
+  if (entry.numPolicies !== '' && entry.numPolicies != null) pieces.push(`${entry.numPolicies} policies`);
+  if (entry.saleType) pieces.push(entry.saleType === 'new_household' ? 'New Household' : 'Cross-Sell');
+  return pieces.join(' | ') || entry.details || '--';
+}
+
+function ActivityHistoryModal({ person, onClose }) {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/log')
+      .then(res => res.json())
+      .then(data => {
+        if (!active) return;
+        const filtered = (Array.isArray(data) ? data : [])
+          .filter(entry => {
+            if (entry.person !== person.id) return false;
+            if (person.id === 'dan') return isDanReportActivity(entry);
+            return true;
+          })
+          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        setEntries(filtered);
+      })
+      .catch(() => setEntries([]))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [person.id]);
+
+  return (
+    <div className="overlay" onClick={event => event.target === event.currentTarget && onClose()}>
+      <div className="modal activity-history-modal">
+        <div className="modal-tag">{person.name}</div>
+        <div className="modal-title">All Activity</div>
+        <div className="activity-history-table-wrap">
+          {loading ? (
+            <div className="activity-log-empty">Loading activity...</div>
+          ) : entries.length === 0 ? (
+            <div className="activity-log-empty">No saved activity found.</div>
+          ) : (
+            <div className="activity-history-table">
+              <div className="activity-history-row activity-history-head">
+                <span>Date</span>
+                <span>Time</span>
+                <span>Activity</span>
+                <span>Client</span>
+                <span>Details</span>
+                <span>Points</span>
+              </div>
+              {entries.map(entry => (
+                <div className="activity-history-row" key={entry.id || `${entry.timestamp}-${entry.person}-${entry.taskId}`}>
+                  <span>{entry.date || '--'}</span>
+                  <span>{entry.time || '--'}</span>
+                  <span>{entry.activityType || entry.taskLabel || '--'}</span>
+                  <span>{entry.clientName || '--'}</span>
+                  <span>{formatHistoryDetails(entry)}</span>
+                  <span>{entry.points ? `+${entry.points}` : '0'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="modal-confirm" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function slotId(task, slot) {
   return `${task.baseId}_${slot}`;
 }
@@ -241,11 +376,11 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
   const [viewDate, setViewDate] = useState(today);
   const [weekData, setWeekData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(today);
-  const [winValue, setWinValue] = useState('');
-  const [challengeValue, setChallengeValue] = useState('');
-  const [feedbackValue, setFeedbackValue] = useState('');
+  const [dailySummaryValue, setDailySummaryValue] = useState('');
   const [revenueTask, setRevenueTask] = useState(null);
   const [clientTask, setClientTask] = useState(null);
+  const [crossSellTask, setCrossSellTask] = useState(null);
+  const [showActivityHistory, setShowActivityHistory] = useState(false);
   const [editingConversations, setEditingConversations] = useState(false);
   const [conversationDraft, setConversationDraft] = useState('0');
   const [dailySaveStatus, setDailySaveStatus] = useState('saved');
@@ -275,9 +410,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
     const hasLocalDraft = ['dirty', 'saving', 'error'].includes(dailySaveStatusRef.current);
     if (hasLocalDraft && !selectionChanged) return;
     dailySelectionRef.current = dailyKey;
-    setWinValue(personData?.wins?.[selectedDate] || '');
-    setChallengeValue(personData?.challenges?.[selectedDate] || '');
-    setFeedbackValue(personData?.feedback?.[selectedDate] || '');
+    setDailySummaryValue(personData?.feedback?.[selectedDate] || '');
     setDailyStatus('saved');
   }, [selectedDate, person.id, personData]);
 
@@ -294,7 +427,14 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
 
   const producerTasks = expandProducerTasks();
   const dayPoints = isDan
-    ? DAN_TASKS.reduce((sum, task) => sum + (todayTasks[task.id] ? task.points : 0), 0) + getMissedCallsPoints(missedCallsValue)
+    ? DAN_TASKS.reduce((sum, task) => {
+        if (task.slots) {
+          return sum + Array.from({ length: task.slots }, (_, index) => slotId(task, index + 1))
+            .filter(id => todayTasks[id])
+            .length * task.points;
+        }
+        return sum + (todayTasks[task.id] ? task.points : 0);
+      }, 0) + getMissedCallsPoints(missedCallsValue)
     : producerTasks.reduce((sum, task) => {
         if (task.id === 'new_conv') return sum + getNewConvPoints(convCount);
         return sum + (todayTasks[task.id] ? task.points : 0);
@@ -363,6 +503,14 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
       setRevenueTask(task);
       return;
     }
+    if (isDan && task.id === 'cross_sell_opportunity') {
+      setCrossSellTask(task);
+      return;
+    }
+    if (task.requiresClient || (isDan && DAN_CLIENT_DETAIL_TASK_IDS.has(task.id))) {
+      setClientTask(task);
+      return;
+    }
     if (/^life_app_out_\d+$/.test(task.id) || /^referral_received_\d+$/.test(task.id)) {
       setClientTask(task);
       return;
@@ -400,26 +548,28 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
     setClientTask(null);
   }
 
+  function handleCrossSellSave(details) {
+    if (!canEdit) return;
+    if (!crossSellTask) return;
+    save('/api/task', {
+      person: person.id,
+      taskId: crossSellTask.id,
+      date: selectedDate,
+      completed: true,
+      clientName: details.clientName || '',
+      product: details.product || '',
+    });
+    setCrossSellTask(null);
+  }
+
   function handleMissedCallsChange(value) {
     if (!canEdit) return;
     save('/api/task', { person: person.id, taskId: 'missed_calls', date: selectedDate, completed: value, clientName: null });
   }
 
-  function handleWinChange(e) {
+  function handleDailySummaryChange(e) {
     if (!canEdit) return;
-    setWinValue(e.target.value);
-    setDailyStatus('dirty');
-  }
-
-  function handleChallengeChange(e) {
-    if (!canEdit) return;
-    setChallengeValue(e.target.value);
-    setDailyStatus('dirty');
-  }
-
-  function handleFeedbackChange(e) {
-    if (!canEdit) return;
-    setFeedbackValue(e.target.value);
+    setDailySummaryValue(e.target.value);
     setDailyStatus('dirty');
   }
 
@@ -433,9 +583,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
         body: JSON.stringify({
           person: person.id,
           date: selectedDate,
-          win: winValue,
-          challenge: challengeValue,
-          feedback: feedbackValue,
+          feedback: dailySummaryValue,
         }),
       });
       if (!res.ok) throw new Error('Daily note save failed');
@@ -537,6 +685,36 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
           {isDan ? (
             <>
               {DAN_TASKS.map(task => {
+                if (task.slots) {
+                  const checkedCount = Array.from({ length: task.slots }, (_, index) => slotId(task, index + 1))
+                    .filter(id => todayTasks[id]).length;
+                  return (
+                    <div key={task.baseId} className={`task-item compact-task${checkedCount ? ' done' : ''}`}>
+                      <div className="task-info">
+                        <div className="task-label">{task.label}</div>
+                        {checkedCount > 0 && <div className="task-client">{checkedCount} of {task.slots} completed</div>}
+                      </div>
+                      <div className="compact-checks">
+                        {Array.from({ length: task.slots }, (_, index) => {
+                          const id = slotId(task, index + 1);
+                          const done = !!todayTasks[id];
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              className={`compact-check${done ? ' done' : ''}`}
+                              onClick={() => handleTaskToggle({ ...task, id })}
+                              disabled={!canEdit}
+                              title={`${task.label} ${index + 1}`}
+                            >
+                              <span className="task-check-mark" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
                 const done = !!todayTasks[task.id];
                 return (
                   <button key={task.id} className={`task-item${done ? ' done' : ''}`} onClick={() => handleTaskToggle(task)} disabled={!canEdit}>
@@ -637,7 +815,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
                             );
                           })}
                         </div>
-                        <span className="task-pts">+{task.points} ea</span>
+                        {!task.requiresClient && <span className="task-pts">+{task.points} ea</span>}
                       </div>
                     );
                   }
@@ -672,17 +850,15 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
               Save
             </button>
           </div>
-          <div className="daily-field">
-            <div className="daily-field-label win-label">Win of the Day</div>
-            <textarea className="daily-textarea" placeholder="Biggest win today?" value={winValue} onChange={handleWinChange} disabled={!canEdit} />
-          </div>
-          <div className="daily-field">
-            <div className="daily-field-label challenge-label">Challenge of the Day</div>
-            <textarea className="daily-textarea" placeholder="Struggling with something?" value={challengeValue} onChange={handleChallengeChange} disabled={!canEdit} />
-          </div>
-          <div className="daily-field">
-            <div className="daily-field-label feedback-label">Feedback, Tip, or Agency Improvement</div>
-            <textarea className="daily-textarea" placeholder="What would make the agency better?" value={feedbackValue} onChange={handleFeedbackChange} disabled={!canEdit} />
+          <div className="daily-field daily-summary-field">
+            <div className="daily-field-label summary-label">Daily Summary</div>
+            <textarea
+              className="daily-textarea"
+              placeholder="Please provide 3-5 sentences reviewing the day, wins, challenges, feedback, etc."
+              value={dailySummaryValue}
+              onChange={handleDailySummaryChange}
+              disabled={!canEdit}
+            />
           </div>
         </div>
       </div>
@@ -693,7 +869,12 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
             <div className="activity-log-title">Daily Activity Log</div>
             <div className="activity-log-subtitle">Key activity entries for {selectedDate}</div>
           </div>
-          <span>{dayLog.length} entries</span>
+          <div className="activity-log-actions">
+            <button type="button" className="activity-history-btn" onClick={() => setShowActivityHistory(true)}>
+              View All Activity
+            </button>
+            <span>{dayLog.length} entries</span>
+          </div>
         </div>
         {dayLog.length === 0 ? (
           <div className="activity-log-empty">No tracked activity has been logged for this date yet.</div>
@@ -733,6 +914,12 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
       )}
       {clientTask && (
         <ClientNameModal task={clientTask} onCancel={() => setClientTask(null)} onSave={handleClientTaskSave} />
+      )}
+      {crossSellTask && (
+        <CrossSellModal task={crossSellTask} onCancel={() => setCrossSellTask(null)} onSave={handleCrossSellSave} />
+      )}
+      {showActivityHistory && (
+        <ActivityHistoryModal person={person} onClose={() => setShowActivityHistory(false)} />
       )}
       {correctionEntry && (
         <ActivityCorrectionModal entry={correctionEntry} onCancel={() => setCorrectionEntry(null)} onSave={saveActivityCorrection} />

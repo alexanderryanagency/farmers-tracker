@@ -993,6 +993,7 @@ html, body, #root {
   min-height: 190px; display: flex; flex-direction: column;
   padding: 18px 20px; border-bottom: 1px solid var(--border); overflow: visible;
 }
+.daily-summary-field { min-height: 520px; }
 .daily-field:last-child { border-bottom: none; }
 .daily-field-label {
   font-size: 14px; font-weight: 800; text-transform: uppercase;
@@ -1002,6 +1003,7 @@ html, body, #root {
 .daily-field-label.win-label { color: #4ade80; border-bottom-color: rgba(74,222,128,0.2); }
 .daily-field-label.challenge-label { color: #fb923c; border-bottom-color: rgba(251,146,60,0.2); }
 .daily-field-label.feedback-label { color: #60a5fa; border-bottom-color: rgba(96,165,250,0.22); }
+.daily-field-label.summary-label { color: #60a5fa; border-bottom-color: rgba(96,165,250,0.22); }
 .daily-textarea {
   flex: 1; resize: none; background: transparent; border: none;
   font-family: inherit; font-size: 15px; line-height: 1.7; color: var(--text); min-height: 80px;
@@ -1031,8 +1033,47 @@ html, body, #root {
   color: var(--gold); font-size: 12px; font-weight: 800;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+.activity-log-actions {
+  display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.activity-log-actions > span {
+  color: var(--gold); font-size: 12px; font-weight: 800;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.activity-history-btn {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--card); color: var(--text);
+  font-size: 12px; font-weight: 900; padding: 7px 10px;
+  cursor: pointer; white-space: nowrap;
+}
+.activity-history-btn:hover { border-color: var(--gold); color: var(--gold); }
 .activity-log-empty {
   padding: 18px 16px; color: var(--muted); font-size: 13px;
+}
+.activity-history-modal {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: calc(100vh - 72px);
+  display: flex; flex-direction: column;
+}
+.activity-history-table-wrap {
+  border: 1px solid var(--border); border-radius: 10px;
+  overflow: auto; min-height: 180px; margin-top: 12px;
+}
+.activity-history-table { min-width: 820px; }
+.activity-history-row {
+  display: grid; grid-template-columns: 105px 90px 1.2fr 1.2fr 1.5fr 80px;
+  gap: 10px; align-items: center;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text);
+}
+.activity-history-row:last-child { border-bottom: none; }
+.activity-history-head {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--card); color: var(--muted);
+  font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;
+}
+.activity-history-row span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .activity-log-table { width: 100%; overflow-x: auto; }
 .activity-log-row {
@@ -2558,6 +2599,7 @@ body {
 .daily-field-label.win-label { color: var(--green); border-bottom-color: rgba(53, 229, 143, 0.30); }
 .daily-field-label.challenge-label { color: var(--pink); border-bottom-color: rgba(255, 110, 199, 0.30); }
 .daily-field-label.feedback-label { color: var(--blue); border-bottom-color: rgba(125, 211, 252, 0.32); }
+.daily-field-label.summary-label { color: var(--blue); border-bottom-color: rgba(125, 211, 252, 0.32); }
 
 .stats-grid .stat-card:nth-child(1),
 .stats-grid-2 .stat-card:nth-child(1) {

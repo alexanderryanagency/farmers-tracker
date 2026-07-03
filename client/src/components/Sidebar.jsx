@@ -1,9 +1,9 @@
 import { LayoutDashboard, Zap, CheckSquare, ClipboardList, BarChart2, MessageSquare, Trophy, Sun, Moon, LogOut } from 'lucide-react';
 
 const NAV_ITEMS = [
+  { id: 'activity', label: 'Activity Tracker', Icon: CheckSquare     },
   { id: 'command',  label: 'Command Center',  Icon: LayoutDashboard },
   { id: 'send',     label: 'Send Suite',       Icon: Zap             },
-  { id: 'activity', label: 'Activity Tracker', Icon: CheckSquare     },
   { id: 'operations', label: 'Operations Pipeline', Icon: ClipboardList },
   { id: 'stats',    label: 'My Stats',         Icon: BarChart2       },
   { id: 'coach',    label: "Coach's Corner",   Icon: MessageSquare   },

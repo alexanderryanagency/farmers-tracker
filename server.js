@@ -87,6 +87,8 @@ app.use(express.static(clientDist));
 
 const TASK_POINTS = {
   followup_dials: 10,
+  renewals_completed: 2,
+  renewals_completed_1: 2, renewals_completed_2: 2, renewals_completed_3: 2,
   life_app_out_1: 10, life_app_out_2: 10, life_app_out_3: 10,
   life_app_back_1: 20, life_app_back_2: 20, life_app_back_3: 20,
   sale_1: 20, sale_2: 20, sale_3: 20,
@@ -102,6 +104,8 @@ const TASK_POINTS = {
   add_sales_to_onboard: 5,
   got_past_due_payment: 10,
   completed_onboarding: 5,
+  renewals_completed: 2,
+  renewals_completed_1: 2, renewals_completed_2: 2, renewals_completed_3: 2,
   dan_referral_received: 20,
   cross_sell_opportunity: 20,
 };
@@ -109,6 +113,10 @@ const TASK_POINTS = {
 const TASK_LABELS = {
   new_conv: 'New Conversations',
   followup_dials: '30 Follow-Up Dials',
+  renewals_completed: 'Renewals Completed',
+  renewals_completed_1: 'Renewals Completed #1',
+  renewals_completed_2: 'Renewals Completed #2',
+  renewals_completed_3: 'Renewals Completed #3',
   life_app_out_1: 'Life App Out #1',
   life_app_out_2: 'Life App Out #2',
   life_app_out_3: 'Life App Out #3',
@@ -364,15 +372,29 @@ function mapAgencyZoomLead(lead) {
 
 function getActivityType(taskId) {
   if (taskId === 'new_conv') return 'New Conversation';
+  if (taskId === 'followup_dials') return 'Follow-Up Dials';
+  if (taskId === 'renewals_completed' || /^renewals_completed_\d+$/.test(taskId)) return 'Renewals Completed';
   if (/^sale_\d+$/.test(taskId)) return 'Sale';
   if (/^life_app_out_\d+$/.test(taskId)) return 'Life App Out';
   if (/^life_app_back_\d+$/.test(taskId)) return 'Life App Back';
+  if (/^onboarding_scheduled_\d+$/.test(taskId)) return 'Onboarding Scheduled';
   if (/^referral_received_\d+$/.test(taskId)) return 'Referral Received';
+  if (taskId === 'completed_onboarding') return 'Completed Onboarding';
+  if (taskId === 'dan_referral_received') return 'Referral Received';
+  if (taskId === 'cross_sell_opportunity') return 'Cross-Sell Opportunity';
   return null;
 }
 
-function isDailyActivityLogTask(taskId) {
-  return Boolean(getActivityType(taskId));
+function isDailyActivityLogTask(taskId, person) {
+  const activityType = getActivityType(taskId);
+  if (!activityType) return false;
+  if (person === 'dan') {
+    return taskId === 'completed_onboarding' ||
+      taskId === 'dan_referral_received' ||
+      taskId === 'cross_sell_opportunity' ||
+      /^renewals_completed_\d+$/.test(taskId);
+  }
+  return person === 'alissa';
 }
 
 function formatSaleType(saleType) {
@@ -406,6 +428,9 @@ function formatActivityDetails(entry) {
     if (entry.numPolicies !== '' && entry.numPolicies != null) pieces.push(`${entry.numPolicies} policies`);
     return pieces.join(' | ');
   }
+  if (entry.activityType === 'Cross-Sell Opportunity') {
+    return entry.product ? `Product: ${entry.product}` : '';
+  }
   return entry.details || '';
 }
 
@@ -424,6 +449,7 @@ function serializeActivityLogEntry(entry) {
     premium: entry.premium || '',
     numPolicies: entry.numPolicies ?? '',
     saleType: entry.saleType || '',
+    product: entry.product || '',
     points: entry.points || 0,
     durationMinutes: entry.durationMinutes ?? null,
     durationText: entry.durationText || formatDuration(entry.durationMinutes),
@@ -985,10 +1011,10 @@ app.get('/api/kpi', (req, res) => {
 });
 
 app.post('/api/task', (req, res) => {
-  const { person, taskId, date, completed, clientName, premium, numPolicies, numHouseholds, saleType } = req.body;
+  const { person, taskId, date, completed, clientName, premium, numPolicies, numHouseholds, saleType, product } = req.body;
   if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   store.setTask(person, taskId, date, completed);
-  const shouldLogActivity = isDailyActivityLogTask(taskId);
+  const shouldLogActivity = isDailyActivityLogTask(taskId, person);
 
   if (completed) {
     store.setClientName(person, taskId, date, clientName);
@@ -1015,6 +1041,7 @@ app.post('/api/task', (req, res) => {
     if (numPolicies  != null) entry.numPolicies  = numPolicies;
     if (isSaleTask || isLifeAppBackTask || numHouseholds != null) entry.numHouseholds = householdCount;
     if (normalizedSaleType) entry.saleType = normalizedSaleType;
+    if (product) entry.product = product;
     if (isSaleTask) entry.newHousehold = normalizedSaleType === 'new_household';
     if (shouldLogActivity) store.addLogEntry(entry);
 

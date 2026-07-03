@@ -14,9 +14,9 @@ import { getLocalDateString } from './utils/folio';
 import './App.css';
 
 const MOBILE_NAV = [
+  { id: 'activity', label: 'Activity', Icon: CheckSquare     },
   { id: 'command',  label: 'Home',     Icon: LayoutDashboard },
   { id: 'send',     label: 'Send',     Icon: Zap             },
-  { id: 'activity', label: 'Activity', Icon: CheckSquare     },
   { id: 'operations', label: 'Ops',     Icon: ClipboardList   },
   { id: 'stats',    label: 'Stats',    Icon: BarChart2       },
   { id: 'coach',    label: 'Coach',    Icon: MessageSquare   },
@@ -56,7 +56,7 @@ export default function App() {
     } catch { return null; }
   });
 
-  const [activeTab, setActiveTab] = useState('command');
+  const [activeTab, setActiveTab] = useState('activity');
   const [weekData, setWeekData]   = useState(null);
   const [kpiData,  setKpiData]    = useState(null);
   const [loading,  setLoading]    = useState(true);
