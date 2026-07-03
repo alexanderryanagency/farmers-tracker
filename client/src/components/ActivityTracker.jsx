@@ -153,7 +153,7 @@ function RevenueModal({ task, onCancel, onSave }) {
   const [policies, setPolicies] = useState('');
   const [saleType, setSaleType] = useState('new_household');
   const isSale = task.revenueType === 'sale';
-  const needsClient = task.revenueType === 'life_app_back';
+  const needsClient = isSale || task.revenueType === 'life_app_back';
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
