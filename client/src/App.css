@@ -1050,12 +1050,6 @@ html, body, #root {
 .activity-log-empty {
   padding: 18px 16px; color: var(--muted); font-size: 13px;
 }
-.activity-history-modal {
-  width: min(88vw, 1280px);
-  height: min(88vh, 900px);
-  max-height: calc(100vh - 48px);
-  display: flex; flex-direction: column;
-}
 .activity-history-table-wrap {
   border: 1px solid var(--border); border-radius: 10px;
   overflow: auto; min-height: 0; margin-top: 12px; flex: 1;
@@ -1293,6 +1287,12 @@ html, body, #root {
   width: 100%; max-width: 360px;
   display: flex; flex-direction: column; gap: 14px;
   box-shadow: 0 0 60px rgba(0,0,0,0.4);
+}
+.modal.activity-history-modal {
+  width: min(88vw, 1280px);
+  max-width: 1280px;
+  height: min(88vh, 900px);
+  max-height: calc(100vh - 48px);
 }
 .modal-tag { font-size: 10px; font-weight: 800; color: var(--gold); text-transform: uppercase; letter-spacing: 1.5px; }
 .modal-title { font-size: 20px; font-weight: 900; color: var(--text); letter-spacing: -0.3px; margin-top: -4px; }
@@ -2184,8 +2184,9 @@ html, body, #root {
   .mini-car-body { width: 38px; height: 17px; }
   .producer-kpi-strip { grid-template-columns: repeat(2, 1fr); }
   .pkpi-card { border-bottom: 1px solid var(--border); }
-  .activity-history-modal {
+  .modal.activity-history-modal {
     width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
     height: calc(100vh - 32px);
     max-height: calc(100vh - 32px);
   }
