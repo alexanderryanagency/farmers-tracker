@@ -2,14 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { Trophy } from 'lucide-react';
 import SpinWheel from './SpinWheel';
+import { PRODUCER_PREMIUM_GOAL } from '../utils/folio';
 
 const socket = io();
+const PRODUCER_PREMIUM_GOAL_LABEL = PRODUCER_PREMIUM_GOAL >= 1000
+  ? `$${(PRODUCER_PREMIUM_GOAL / 1000).toFixed(0)}k`
+  : `$${PRODUCER_PREMIUM_GOAL}`;
+const PRODUCER_PREMIUM_GOAL_FULL = `$${PRODUCER_PREMIUM_GOAL.toLocaleString()}`;
 
 const ALL_BADGES = [
   { emoji: '🔥', name: 'Hot Streak',       desc: '3 consecutive days with a sale',        key: 'hotStreak'       },
   { emoji: '💰', name: '$20k Club',         desc: '$20,000+ premium in a folio',           key: 'club20k'         },
   { emoji: '💰', name: '$25k Club',         desc: '$25,000+ premium in a folio',           key: 'club25k'         },
-  { emoji: '🏆', name: '$30k Club',         desc: '$30,000+ premium in a folio',           key: 'club30k'         },
+  { emoji: '🏆', name: `${PRODUCER_PREMIUM_GOAL_LABEL} Club`, desc: `${PRODUCER_PREMIUM_GOAL_FULL}+ premium in a folio`, key: 'club30k' },
   { emoji: '🎯', name: 'Life Pro',          desc: '3+ life policies in a folio',           key: 'lifePro'         },
   { emoji: '⚡', name: 'Speed Demon',       desc: '5+ conversations in one day',           key: 'speedDemon'      },
   { emoji: '🤝', name: 'Bundle King',       desc: '5+ bundles in a folio',                 key: 'bundleKing'      },
@@ -74,7 +79,7 @@ function computePersonBadges(personId, log, kpiData, folioTasks, maxPremium) {
   // Premium clubs (producer only)
   const club20k = isProducer && premium >= 20000;
   const club25k = isProducer && premium >= 25000;
-  const club30k = isProducer && premium >= 30000;
+  const club30k = isProducer && premium >= PRODUCER_PREMIUM_GOAL;
 
   // Life Pro: 3+ life policies (producer only)
   const lifePro = isProducer && personLog.filter(e => e.taskId === 'life_app' || e.taskId === 'life_sale').length >= 3;

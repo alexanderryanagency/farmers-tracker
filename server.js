@@ -16,6 +16,7 @@ const path = require('path');
 const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const store = require('./store');
+const folioConfig = require('./folioConfig.json');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ZAPIER_NOTES_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/27302285/4ykpdtv/';
@@ -885,14 +886,8 @@ app.get('/api/week', (req, res) => {
   res.json({ weekDates, weekKey, activityLog, data });
 });
 
-const CONFIRMED_2026_FOLIOS = [
-  { name: 'May 2026 Folio', start: '2026-04-18', end: '2026-05-19' },
-  { name: 'June 2026 Folio', start: '2026-05-20', end: '2026-06-18' },
-  { name: 'July 2026 Folio', start: '2026-06-19', end: '2026-07-17' },
-];
+const CONFIRMED_2026_FOLIOS = folioConfig.folios;
 
-// Farmers may switch to calendar-month sales cycles later in 2026; update this
-// confirmed folio config once the remaining 2026 schedule is known.
 function getActiveFolio(dateStr) {
   return CONFIRMED_2026_FOLIOS.find(folio => dateStr >= folio.start && dateStr <= folio.end) || null;
 }

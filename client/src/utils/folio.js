@@ -1,11 +1,10 @@
-export const CONFIRMED_2026_FOLIOS = [
-  { name: 'May 2026 Folio', start: '2026-04-18', end: '2026-05-19' },
-  { name: 'June 2026 Folio', start: '2026-05-20', end: '2026-06-18' },
-  { name: 'July 2026 Folio', start: '2026-06-19', end: '2026-07-17' },
-];
+import folioConfig from '../../../folioConfig.json';
 
-// Farmers may switch to calendar-month sales cycles later in 2026; update this
-// confirmed folio config once the remaining 2026 schedule is known.
+export const CONFIRMED_2026_FOLIOS = folioConfig.folios;
+export const FOLIO_GOALS = folioConfig.goals;
+export const PRODUCER_PREMIUM_GOAL = FOLIO_GOALS.producerPremium;
+export const AGENCY_PREMIUM_GOAL = FOLIO_GOALS.agencyPremium;
+
 export function getActiveFolio(date = new Date()) {
   const dateStr = typeof date === 'string' ? date : getLocalDateString(date);
   return CONFIRMED_2026_FOLIOS.find(folio => dateStr >= folio.start && dateStr <= folio.end) || null;
@@ -23,9 +22,13 @@ export function getFolioDisplay(folio, date = new Date()) {
 }
 
 function getDaysRemaining(endDateStr, date) {
-  const today = parseLocalDate(typeof date === 'string' ? date : getLocalDateString(date));
-  const end = parseLocalDate(endDateStr);
-  return Math.max(0, Math.ceil((end - today) / 86400000));
+  const todayStr = typeof date === 'string' ? date : getLocalDateString(date);
+  if (todayStr > endDateStr) return 0;
+  let count = 0;
+  for (const dateStr of dateRange(todayStr, endDateStr)) {
+    if (isBusinessDay(dateStr)) count++;
+  }
+  return count;
 }
 
 function formatShortDate(dateStr) {
@@ -34,6 +37,22 @@ function formatShortDate(dateStr) {
 
 function parseLocalDate(dateStr) {
   return new Date(`${dateStr}T00:00:00`);
+}
+
+function dateRange(start, end) {
+  const dates = [];
+  const cursor = new Date(`${start}T12:00:00Z`);
+  const last = new Date(`${end}T12:00:00Z`);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function isBusinessDay(dateStr) {
+  const day = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
+  return day >= 1 && day <= 5;
 }
 
 export function getLocalDateString(date = new Date()) {

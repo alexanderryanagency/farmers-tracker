@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Check, ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react';
+import { PRODUCER_PREMIUM_GOAL } from '../utils/folio';
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -605,7 +606,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
   const convGood = (kpi?.avgConvPerDay ?? 0) >= 3;
   const closeGood = (kpi?.closeRate ?? 0) >= 25;
   const polGood = kpi?.totalHouseholds > 0 && (kpi?.policiesPerHH ?? 0) >= 1.5;
-  const premGood = (kpi?.premiumPace ?? 0) >= 30000;
+  const premGood = (kpi?.premiumPace ?? 0) >= PRODUCER_PREMIUM_GOAL;
 
   return (
     <div className="activity-body">

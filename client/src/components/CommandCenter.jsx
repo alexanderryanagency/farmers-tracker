@@ -1,6 +1,4 @@
-import { getActiveFolio, getFolioDisplay } from '../utils/folio';
-
-const PREMIUM_GOAL    = 30000;
+import { AGENCY_PREMIUM_GOAL, PRODUCER_PREMIUM_GOAL, getActiveFolio, getFolioDisplay } from '../utils/folio';
 
 const CAR_COLORS = { alissa: '#CC0000', dan: '#8B9BC1' };
 
@@ -61,7 +59,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
     { label: 'New Conversations', display: String(teamKpi?.totalConversations ?? 0), goal: 'goal: 60 / folio', good: (teamKpi?.totalConversations ?? 0) >= 40 },
     { label: 'Close Rate',        display: `${(teamKpi?.closeRate ?? 0).toFixed(1)}%`,goal: 'goal: 25%',         good: (teamKpi?.closeRate ?? 0) >= 25 },
     { label: 'Policies / HH',     display: teamKpi?.totalHouseholds ? teamKpi.policiesPerHH.toFixed(2) : '—', goal: 'goal: 1.5', good: (teamKpi?.policiesPerHH ?? 0) >= 1.5 },
-    { label: 'Premium Written',   display: fmt$(teamKpi?.totalPremium ?? 0), goal: 'goal: $60k combined', good: (teamKpi?.totalPremium ?? 0) >= 60000 },
+    { label: 'Premium Written',   display: fmt$(teamKpi?.totalPremium ?? 0), goal: `goal: ${fmt$(AGENCY_PREMIUM_GOAL)} combined`, good: (teamKpi?.totalPremium ?? 0) >= AGENCY_PREMIUM_GOAL },
   ];
 
   // ── Premium race track data ──
@@ -75,9 +73,9 @@ export default function CommandCenter({ weekData, kpiData, people }) {
     .sort((a, b) => (b.pData?.totalPremium || 0) - (a.pData?.totalPremium || 0));
 
   const MARKERS = [
-    { pct: 25, label: '$7.5k' },
-    { pct: 50, label: '$15k' },
-    { pct: 75, label: '$22.5k' },
+    { pct: 25, label: fmt$(PRODUCER_PREMIUM_GOAL * 0.25) },
+    { pct: 50, label: fmt$(PRODUCER_PREMIUM_GOAL * 0.5) },
+    { pct: 75, label: fmt$(PRODUCER_PREMIUM_GOAL * 0.75) },
   ];
 
   return (
@@ -103,7 +101,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
 
       {/* Premium Race Track */}
       <div className="race-section">
-        <div className="section-title">Premium Race — $30k Goal Per Producer</div>
+        <div className="section-title">Premium Race — {fmt$(PRODUCER_PREMIUM_GOAL)} Goal Per Producer</div>
         <div className="prem-race">
           {/* Percentage header labels */}
           <div className="prem-race-pct-header">
@@ -112,7 +110,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
               {MARKERS.map(({ pct, label }) => (
                 <span key={pct} className="prem-race-pct-label" style={{ left: `${pct}%` }}>{label}</span>
               ))}
-              <span className="prem-race-pct-label" style={{ left: '100%' }}>$30k 🏁</span>
+              <span className="prem-race-pct-label" style={{ left: '100%' }}>{fmt$(PRODUCER_PREMIUM_GOAL)} 🏁</span>
             </div>
           </div>
 
@@ -120,7 +118,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
             const isProducer = lane.role === 'Producer';
             const d = lane.pData;
             const premium = d?.totalPremium || 0;
-            const pct = isProducer ? Math.min(premium / PREMIUM_GOAL, 1) : 0;
+            const pct = isProducer ? Math.min(premium / PRODUCER_PREMIUM_GOAL, 1) : 0;
             const carLeft = isProducer ? Math.max(2, Math.min(pct * 100, 97)) : 2;
             const color = CAR_COLORS[lane.id] || '#8B9BC1';
 
@@ -180,8 +178,8 @@ export default function CommandCenter({ weekData, kpiData, people }) {
         {producerLanes.map(lane => {
           const d = lane.pData;
           const premium = d?.totalPremium || 0;
-          const atGoal = premium >= PREMIUM_GOAL;
-          const need = Math.max(0, PREMIUM_GOAL - premium);
+          const atGoal = premium >= PRODUCER_PREMIUM_GOAL;
+          const need = Math.max(0, PRODUCER_PREMIUM_GOAL - premium);
           const needPerDay = folioDisplay.daysRemaining > 0 ? need / folioDisplay.daysRemaining : 0;
           const color = CAR_COLORS[lane.id] || '#8B9BC1';
 
@@ -194,7 +192,7 @@ export default function CommandCenter({ weekData, kpiData, people }) {
                 </div>
                 <div className={`pkc-premium ${atGoal ? 'at-goal' : 'below-goal'}`}>{fmt$(premium)}</div>
                 <div className="pkc-metrics">
-                  <MetricRow label="Goal"            value={fmt$(PREMIUM_GOAL)} />
+                  <MetricRow label="Goal"            value={fmt$(PRODUCER_PREMIUM_GOAL)} />
                   <MetricRow label="Conversations"   value={d?.totalConversations ?? 0} />
                   <MetricRow label="Close Rate"      value={`${(d?.closeRate ?? 0).toFixed(1)}%`} />
                   <MetricRow label="Pol / HH"        value={(d?.policiesPerHH ?? 0).toFixed(2)} />

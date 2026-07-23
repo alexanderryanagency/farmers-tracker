@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { BarChart2 } from 'lucide-react';
-import { getActiveFolio, getFolioDisplay } from '../utils/folio';
+import { PRODUCER_PREMIUM_GOAL, getActiveFolio, getFolioDisplay } from '../utils/folio';
 
 const GOALS = {
   conversations: 60,
-  premium:       30000,
+  premium:       PRODUCER_PREMIUM_GOAL,
   closeRate:     25,
   polPerHH:      1.5,
   lifeApps:      1,
