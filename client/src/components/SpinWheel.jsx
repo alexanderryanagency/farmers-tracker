@@ -6,7 +6,7 @@ const PRIZES = [
   { id: 'lunch',     label: 'Team Lunch',           lines: ['Team', 'Lunch'],      emoji: '🍕', weight: 1,   color: '#EA580C' },
   { id: 'cash_50',   label: '$50 Cash',             lines: ['$50', 'Cash'],        emoji: '💵', weight: 1,   color: '#9333EA' },
   { id: 'cash_100',  label: '$100 Cash',            lines: ['$100', 'Cash'],       emoji: '🎉', weight: 0.5, color: '#B45309' },
-  { id: 'swag',      label: 'Agency Swag',          lines: ['Agency', 'Swag'],     emoji: '🧢', weight: 1,   color: '#BE185D' },
+  { id: 'lunch_10',  label: '$10 Lunch Gift Card',  lines: ['$10 Lunch', 'Gift Card'], emoji: '🍽️', weight: 1, color: '#BE185D' },
   { id: 'trophy',    label: 'Top Performer Trophy', lines: ['Top', 'Trophy'],      emoji: '🎯', weight: 1,   color: '#CC0000' },
 ];
 
