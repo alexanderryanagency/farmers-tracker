@@ -3,7 +3,8 @@
     { "name": "May 2026 Folio", "start": "2026-04-18", "end": "2026-05-19" },
     { "name": "June 2026 Folio", "start": "2026-05-20", "end": "2026-06-18" },
     { "name": "July 2026 Folio", "start": "2026-06-19", "end": "2026-07-17" },
-    { "name": "August 2026 Folio", "start": "2026-07-18", "end": "2026-08-19" }
+    { "name": "August 2026 Folio", "start": "2026-07-18", "end": "2026-08-19" },
+    { "name": "September 2026 Folio", "start": "2026-08-20", "end": "2026-09-18" }
   ],
   "goals": {
     "producerPremium": 30000,
