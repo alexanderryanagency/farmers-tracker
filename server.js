@@ -910,6 +910,26 @@ function workingDays(dates) {
   }).length;
 }
 
+function parseMoney(value) {
+  const amount = parseFloat(String(value || '').replace(/[$,\s]/g, ''));
+  return Number.isNaN(amount) ? 0 : amount;
+}
+
+function getRevenueMetrics(person, date, taskId, revenueMap) {
+  const details = store.getSaleDetails(person, date)[taskId];
+  const logEntry = revenueMap.get(`${person}-${date}-${taskId}`);
+  const source = details || logEntry || {};
+  const isSaleTask = /^sale_\d+$/.test(taskId);
+  const saleType = source.saleType || (isSaleTask ? 'new_household' : '');
+  const newHousehold = source.newHousehold || (isSaleTask && saleType === 'new_household');
+
+  return {
+    premium: parseMoney(source.premium),
+    policies: Number(source.numPolicies) || (isSaleTask && !details && !logEntry ? 1 : 0),
+    households: Number(source.numHouseholds) || (newHousehold ? 1 : 0),
+  };
+}
+
 app.get('/api/kpi', (req, res) => {
   const today = req.query.date || new Date().toISOString().split('T')[0];
   const activeFolio = getActiveFolio(today);
@@ -971,14 +991,10 @@ app.get('/api/kpi', (req, res) => {
           taskId === 'bundle';
         if (!isRevenueTask) continue;
         if (/^life_app_back_\d+$/.test(taskId)) totalLifeAppsBack++;
-        const entry = revenueMap.get(`${person}-${date}-${taskId}`);
-        if (!entry) continue;
-        if (entry.premium) {
-          const amt = parseFloat(String(entry.premium).replace(/[$,\s]/g, ''));
-          if (!isNaN(amt)) totalPremium += amt;
-        }
-        totalPolicies   += Number(entry.numPolicies) || 0;
-        totalHouseholds += Number(entry.numHouseholds) || (entry.newHousehold ? 1 : 0);
+        const metrics = getRevenueMetrics(person, date, taskId, revenueMap);
+        totalPremium += metrics.premium;
+        totalPolicies += metrics.policies;
+        totalHouseholds += metrics.households;
       }
     }
 
