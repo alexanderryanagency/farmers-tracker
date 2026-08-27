@@ -443,6 +443,12 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
 
   const isCurrentWeek = getMonday(viewDate) >= getMonday(today);
 
+  function selectActivityDate(date) {
+    if (!date) return;
+    setViewDate(date);
+    setSelectedDate(date);
+  }
+
   function navigateWeek(dir) {
     const newView = shiftDate(viewDate, dir * 7);
     if (dir > 0 && getMonday(newView) >= getMonday(today)) {
@@ -614,6 +620,15 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
         <span>{person.name} - Week total:</span>
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>{personData.points} pts</span>
         <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 11 }}>/ {WEEKLY_GOAL} visual goal</span>
+        <label className="activity-date-jump">
+          <span>Edit date</span>
+          <input
+            type="date"
+            value={selectedDate}
+            max={today}
+            onChange={event => selectActivityDate(event.target.value)}
+          />
+        </label>
         {!canEdit && <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontWeight: 600 }}>View only</span>}
       </div>
 

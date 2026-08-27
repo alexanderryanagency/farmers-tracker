@@ -797,6 +797,27 @@ html, body, #root {
   background: var(--gdim); border-bottom: 1px solid var(--border);
   font-size: 12px; font-weight: 700; color: var(--gold); flex-shrink: 0;
 }
+.activity-date-jump {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.activity-date-jump input {
+  width: 132px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 .week-bar {
   display: flex; align-items: center;
   border-bottom: 1px solid var(--border);
