@@ -271,7 +271,9 @@ function isAdminCorrection(req) {
 
 function canEditActivityFor(req, person) {
   const actor = getRequestActor(req);
-  return isAdminActor(actor) || actor.producer === person;
+  if (actor.role === 'admin' || isAdminActor(actor)) return true;
+  if (actor.producer === person) return true;
+  return getActiveTeamMember(actor.email || actor.name)?.activeAppPerson === person;
 }
 
 function isInactiveProducer(value) {

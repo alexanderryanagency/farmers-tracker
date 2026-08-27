@@ -482,12 +482,18 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
 
   async function save(url, body, method = 'POST') {
     if (!canEdit) return;
+    const headers = { 'Content-Type': 'application/json' };
+    if (currentUser?.role) headers['x-user-role'] = currentUser.role;
+    if (currentUser?.email) headers['x-user-email'] = currentUser.email;
     const response = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error('Save failed');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Save failed');
+    }
     onRefresh();
     fetchWeekData();
   }
@@ -513,8 +519,8 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
         actor: currentUser,
       }, 'PATCH');
       setEditingConversations(false);
-    } catch {
-      setConversationSaveError('Could not save conversations.');
+    } catch (err) {
+      setConversationSaveError(err.message || 'Could not save conversations.');
     }
   }
 
