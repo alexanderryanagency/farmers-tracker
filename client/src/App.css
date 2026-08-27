@@ -1325,6 +1325,12 @@ html, body, #root {
 }
 .modal-input:focus { outline: none; border-color: var(--gold); }
 .modal-input::placeholder { color: var(--muted); }
+.modal-error-text {
+  color: #fb7185;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
 .modal-textarea {
   padding: 12px 14px; background: var(--input-bg); border: 1px solid var(--border);
   border-radius: 10px; font-family: inherit; font-size: 13px; color: var(--text);

@@ -152,10 +152,30 @@ function RevenueModal({ task, onCancel, onSave }) {
   const details = task.initialDetails || {};
   const [clientName, setClientName] = useState(details.clientName || '');
   const [premium, setPremium] = useState(details.premium || '');
-  const [policies, setPolicies] = useState(details.numPolicies || '');
+  const [policies, setPolicies] = useState(details.numPolicies || (task.revenueType === 'sale' ? '1' : ''));
   const [saleType, setSaleType] = useState(details.saleType || 'new_household');
+  const [error, setError] = useState('');
   const isSale = task.revenueType === 'sale';
   const needsClient = isSale || task.revenueType === 'life_app_back';
+  const cleanPremium = String(premium).replace(/[$,\s]/g, '');
+
+  async function submit() {
+    setError('');
+    if (!cleanPremium || !Number.isFinite(Number(cleanPremium)) || Number(cleanPremium) <= 0) {
+      setError('Enter the premium sold before saving.');
+      return;
+    }
+    try {
+      await onSave({
+        clientName,
+        premium: cleanPremium,
+        numPolicies: policies ? Number(policies) : (isSale ? 1 : 0),
+        saleType,
+      });
+    } catch {
+      setError('Could not save premium. Please try again.');
+    }
+  }
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
@@ -169,7 +189,7 @@ function RevenueModal({ task, onCancel, onSave }) {
           </>
         )}
         <div className="modal-field-label">Premium Sold ($)</div>
-        <input className="modal-input" type="text" placeholder="e.g. 1200" value={premium} onChange={e => setPremium(e.target.value)} autoFocus={!needsClient} />
+        <input className="modal-input" type="text" inputMode="decimal" placeholder="Enter premium sold" value={premium} onChange={e => setPremium(e.target.value)} autoFocus={!needsClient} />
         <div className="modal-field-label">Policies Sold</div>
         <input className="modal-input" type="number" min="0" placeholder="0" value={policies} onChange={e => setPolicies(e.target.value)} />
         {isSale && (
@@ -181,12 +201,10 @@ function RevenueModal({ task, onCancel, onSave }) {
             </select>
           </>
         )}
+        {error && <div className="modal-error-text">{error}</div>}
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onCancel}>Cancel</button>
-          <button
-            className="modal-confirm"
-            onClick={() => onSave({ clientName, premium, numPolicies: policies ? Number(policies) : 0, saleType })}
-          >
+          <button className="modal-confirm" onClick={submit}>
             Save
           </button>
         </div>
@@ -463,11 +481,12 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
 
   async function save(url, body, method = 'POST') {
     if (!canEdit) return;
-    await fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    if (!response.ok) throw new Error('Save failed');
     onRefresh();
     fetchWeekData();
   }
@@ -536,7 +555,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
     save('/api/task', { person: person.id, taskId: task.id, date: selectedDate, completed: true, clientName: null });
   }
 
-  function handleRevenueSave(details) {
+  async function handleRevenueSave(details) {
     if (!canEdit) return;
     if (!revenueTask) return;
     const saleType = revenueTask.revenueType === 'sale' ? details.saleType || 'new_household' : null;
@@ -550,9 +569,9 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
       saleType,
     };
     if (revenueTask.alreadyCompleted) {
-      save('/api/sale-details', body, 'PATCH');
+      await save('/api/sale-details', body, 'PATCH');
     } else {
-      save('/api/task', { ...body, completed: true });
+      await save('/api/task', { ...body, completed: true });
     }
     setRevenueTask(null);
   }
