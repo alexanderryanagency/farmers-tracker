@@ -403,6 +403,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
   const [showActivityHistory, setShowActivityHistory] = useState(false);
   const [editingConversations, setEditingConversations] = useState(false);
   const [conversationDraft, setConversationDraft] = useState('0');
+  const [conversationSaveError, setConversationSaveError] = useState('');
   const [dailySaveStatus, setDailySaveStatus] = useState('saved');
   const [correctionEntry, setCorrectionEntry] = useState(null);
   const dailySaveStatusRef = useRef('saved');
@@ -493,19 +494,28 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
 
   function startConversationEdit() {
     setConversationDraft(String(convCount));
+    setConversationSaveError('');
     setEditingConversations(true);
   }
 
   async function saveConversationCount() {
     const count = Number(conversationDraft);
-    if (!Number.isInteger(count) || count < 0) return;
-    await save('/api/activity-correction/conversations', {
-      person: person.id,
-      date: selectedDate,
-      count,
-      actor: currentUser,
-    }, 'PATCH');
-    setEditingConversations(false);
+    if (!Number.isInteger(count) || count < 0) {
+      setConversationSaveError('Enter a whole number.');
+      return;
+    }
+    setConversationSaveError('');
+    try {
+      await save('/api/activity-correction/conversations', {
+        person: person.id,
+        date: selectedDate,
+        count,
+        actor: currentUser,
+      }, 'PATCH');
+      setEditingConversations(false);
+    } catch {
+      setConversationSaveError('Could not save conversations.');
+    }
   }
 
   async function saveActivityCorrection(values) {
@@ -812,7 +822,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
                           <div className="task-label">{task.label}</div>
                           <div className="task-client">Auto-counted from 8+ minute Send Suite calls</div>
                         </div>
-                        {currentUser?.role === 'admin' && editingConversations ? (
+                        {canEdit && editingConversations ? (
                           <div className="conversation-correction">
                             <input
                               className="conv-select"
@@ -825,12 +835,13 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
                               autoFocus
                             />
                             <button type="button" onClick={saveConversationCount} title="Save conversation count"><Check size={15} /></button>
-                            <button type="button" onClick={() => setEditingConversations(false)} title="Cancel"><X size={15} /></button>
+                            <button type="button" onClick={() => { setConversationSaveError(''); setEditingConversations(false); }} title="Cancel"><X size={15} /></button>
+                            {conversationSaveError && <span className="conversation-save-error">{conversationSaveError}</span>}
                           </div>
                         ) : (
                           <>
                             <span className="readonly-count">{convCount}</span>
-                            {currentUser?.role === 'admin' && <button type="button" className="activity-icon-btn" onClick={startConversationEdit} title="Edit conversation count"><Pencil size={15} /></button>}
+                            {canEdit && <button type="button" className="activity-icon-btn" onClick={startConversationEdit} title="Edit conversation count"><Pencil size={15} /></button>}
                           </>
                         )}
                         <span className="task-pts">+{getNewConvPoints(convCount)}</span>

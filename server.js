@@ -269,6 +269,11 @@ function isAdminCorrection(req) {
   return isAdminActor(getRequestActor(req));
 }
 
+function canEditActivityFor(req, person) {
+  const actor = getRequestActor(req);
+  return isAdminActor(actor) || actor.producer === person;
+}
+
 function isInactiveProducer(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return INACTIVE_PRODUCERS.has(normalized) || normalized.includes('jayce');
@@ -1200,9 +1205,9 @@ app.delete('/api/log/:id', (req, res) => {
 });
 
 app.patch('/api/activity-correction/conversations', (req, res) => {
-  if (!isAdminCorrection(req)) return res.status(403).json({ error: 'Admin access required' });
   const { person, date } = req.body;
   const count = Number(req.body.count);
+  if (!canEditActivityFor(req, person)) return res.status(403).json({ error: 'Activity edit access required' });
   if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isInteger(count) || count < 0 || count > 50) {
     return res.status(400).json({ error: 'Valid date and conversation count required' });
