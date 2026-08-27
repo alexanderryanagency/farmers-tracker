@@ -918,15 +918,18 @@ function parseMoney(value) {
 function getRevenueMetrics(person, date, taskId, revenueMap) {
   const saleDetails = store.getSaleDetails(person, date)[taskId];
   const logEntry = revenueMap.get(`${person}-${date}-${taskId}`);
-  const source = saleDetails || logEntry || {};
+  const firstValue = (...values) => values.find(value => value !== undefined && value !== null && value !== '');
   const isSaleTask = /^sale_\d+$/.test(taskId);
-  const saleType = source.saleType || (isSaleTask ? 'new_household' : '');
-  const newHousehold = source.newHousehold || (isSaleTask && saleType === 'new_household');
+  const saleType = firstValue(saleDetails?.saleType, logEntry?.saleType) || (isSaleTask ? 'new_household' : '');
+  const newHousehold = Boolean(firstValue(saleDetails?.newHousehold, logEntry?.newHousehold)) ||
+    (isSaleTask && saleType === 'new_household');
+  const policies = Number(firstValue(saleDetails?.numPolicies, logEntry?.numPolicies)) ||
+    (isSaleTask ? 1 : 0);
 
   return {
-    premium: parseMoney(source.premium),
-    policies: Number(source.numPolicies) || 0,
-    households: Number(source.numHouseholds) || (newHousehold ? 1 : 0),
+    premium: parseMoney(firstValue(saleDetails?.premium, logEntry?.premium)),
+    policies,
+    households: Number(firstValue(saleDetails?.numHouseholds, logEntry?.numHouseholds)) || (newHousehold ? 1 : 0),
   };
 }
 
@@ -1096,7 +1099,26 @@ app.post('/api/sale/decrement', (req, res) => {
 });
 
 app.patch('/api/sale-details', (req, res) => {
-  res.status(410).json({ error: 'Activity Tracker tasks have been removed from this workflow' });
+  const { person, taskId, date, clientName, premium, numPolicies, saleType } = req.body;
+  if (!isActivePerson(person)) return res.status(400).json({ error: 'Inactive or unknown team member' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ error: 'Valid date required' });
+  const isRevenueTask = /^sale_\d+$/.test(taskId) || /^life_app_back_\d+$/.test(taskId);
+  if (!isRevenueTask) return res.status(400).json({ error: 'Revenue task required' });
+  if (!store.getTasks(person, date)[taskId]) return res.status(404).json({ error: 'Sale is not checked for this date' });
+
+  const normalizedSaleType = /^sale_\d+$/.test(taskId) ? (saleType || 'new_household') : saleType;
+  const householdCount = /^sale_\d+$/.test(taskId) && normalizedSaleType === 'new_household' ? 1 : 0;
+  const existing = store.getSaleDetails(person, date)[taskId] || {};
+  store.setSaleDetails(person, taskId, date, {
+    ...existing,
+    premium,
+    numPolicies,
+    numHouseholds: householdCount,
+    saleType: normalizedSaleType,
+  });
+  if (clientName !== undefined) store.setClientName(person, taskId, date, clientName || null);
+  io.emit('refresh');
+  res.json({ success: true });
 });
 
 app.post('/api/sales-day', (req, res) => {

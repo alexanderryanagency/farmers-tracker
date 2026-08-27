@@ -149,10 +149,11 @@ function shiftDate(dateStr, days) {
 }
 
 function RevenueModal({ task, onCancel, onSave }) {
-  const [clientName, setClientName] = useState('');
-  const [premium, setPremium] = useState('');
-  const [policies, setPolicies] = useState('');
-  const [saleType, setSaleType] = useState('new_household');
+  const details = task.initialDetails || {};
+  const [clientName, setClientName] = useState(details.clientName || '');
+  const [premium, setPremium] = useState(details.premium || '');
+  const [policies, setPolicies] = useState(details.numPolicies || '');
+  const [saleType, setSaleType] = useState(details.saleType || 'new_household');
   const isSale = task.revenueType === 'sale';
   const needsClient = isSale || task.revenueType === 'life_app_back';
 
@@ -160,7 +161,7 @@ function RevenueModal({ task, onCancel, onSave }) {
     <div className="overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
       <div className="modal">
         <div className="modal-tag">{task.label}</div>
-        <div className="modal-title">Production Details</div>
+        <div className="modal-title">{task.alreadyCompleted ? 'Edit Production Details' : 'Production Details'}</div>
         {needsClient && (
           <>
             <div className="modal-field-label">Client Name</div>
@@ -503,6 +504,16 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
     if (task.readOnly) return;
     const done = !!todayTasks[task.id];
     if (done) {
+      if (task.revenueType) {
+        const existingDetails = personData.saleDetails?.[selectedDate]?.[task.id] || {};
+        const existingClient = personData.clients?.[selectedDate]?.[task.id] || '';
+        setRevenueTask({
+          ...task,
+          alreadyCompleted: true,
+          initialDetails: { ...existingDetails, clientName: existingClient },
+        });
+        return;
+      }
       save('/api/task', { person: person.id, taskId: task.id, date: selectedDate, completed: false, clientName: null });
       return;
     }
@@ -529,16 +540,20 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
     if (!canEdit) return;
     if (!revenueTask) return;
     const saleType = revenueTask.revenueType === 'sale' ? details.saleType || 'new_household' : null;
-    save('/api/task', {
+    const body = {
       person: person.id,
       taskId: revenueTask.id,
       date: selectedDate,
-      completed: true,
       clientName: details.clientName || null,
       premium: details.premium,
       numPolicies: details.numPolicies,
       saleType,
-    });
+    };
+    if (revenueTask.alreadyCompleted) {
+      save('/api/sale-details', body, 'PATCH');
+    } else {
+      save('/api/task', { ...body, completed: true });
+    }
     setRevenueTask(null);
   }
 
