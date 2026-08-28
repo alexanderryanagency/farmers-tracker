@@ -14,6 +14,7 @@ const FILE = resolveDataFile();
 const BACKUP_DIR = process.env.DATA_BACKUP_DIR
   ? path.resolve(process.env.DATA_BACKUP_DIR)
   : path.join(path.dirname(FILE), 'data-backups');
+const MAX_BACKUPS = Number(process.env.DATA_BACKUP_RETENTION || 500);
 const IS_RAILWAY = Boolean(
   process.env.RAILWAY_ENVIRONMENT ||
   process.env.RAILWAY_SERVICE_ID ||
@@ -125,9 +126,34 @@ function ensureDataDir() {
 function backupExistingFile(reason = 'write') {
   if (!fs.existsSync(FILE)) return null;
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  pruneOldBackups(MAX_BACKUPS - 1);
   const backupFile = path.join(BACKUP_DIR, `data-${timestamp()}-${process.hrtime.bigint()}-${reason}.json`);
-  fs.copyFileSync(FILE, backupFile);
+  try {
+    fs.copyFileSync(FILE, backupFile);
+  } catch (err) {
+    if (err.code !== 'ENOSPC') throw err;
+    pruneOldBackups(Math.max(0, MAX_BACKUPS - 25));
+    fs.copyFileSync(FILE, backupFile);
+  }
   return backupFile;
+}
+
+function pruneOldBackups(maxCount) {
+  if (!Number.isFinite(maxCount) || maxCount < 0 || !fs.existsSync(BACKUP_DIR)) return;
+  const backups = fs.readdirSync(BACKUP_DIR)
+    .filter(name => /^data-.*\.json$/.test(name))
+    .map(name => {
+      const file = path.join(BACKUP_DIR, name);
+      const stat = fs.statSync(file);
+      return { file, mtimeMs: stat.mtimeMs };
+    })
+    .sort((a, b) => a.mtimeMs - b.mtimeMs);
+  const removeCount = backups.length - maxCount;
+  if (removeCount <= 0) return;
+  for (const backup of backups.slice(0, removeCount)) {
+    fs.unlinkSync(backup.file);
+  }
+  console.warn(`[DataStore] Pruned ${removeCount} old backup file(s) from ${BACKUP_DIR}`);
 }
 
 function writeState(reason = 'write') {
