@@ -1215,15 +1215,27 @@ function handleConversationCorrection(req, res) {
     return res.status(400).json({ error: 'Valid date and conversation count required' });
   }
 
-  const current = Number(store.getTasks(person, date).new_conv) || 0;
-  if (count < current) {
-    const entries = store.getLog()
-      .filter(entry => entry.person === person && entry.date === date && entry.taskId === 'new_conv')
-      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    entries.slice(0, current - count).forEach(entry => store.deleteLogEntry(entry.id));
+  try {
+    const current = Number(store.getTasks(person, date).new_conv) || 0;
+    if (count < current) {
+      const entries = store.getLog()
+        .filter(entry => entry.person === person && entry.date === date && entry.taskId === 'new_conv')
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      entries.slice(0, current - count).forEach(entry => store.deleteLogEntry(entry.id));
+    }
+    store.setTask(person, 'new_conv', date, count);
+    if (count === 0) store.setClientName(person, 'new_conv', date, null);
+  } catch (err) {
+    console.error('[Activity correction] Conversation save failed:', {
+      person,
+      date,
+      code: err.code || 'unknown',
+      message: err.message,
+      dataFile: store.getDataFilePath(),
+      backupDir: store.getBackupDir(),
+    });
+    return res.status(500).json({ error: `Conversation save failed (${err.code || 'server_error'})` });
   }
-  store.setTask(person, 'new_conv', date, count);
-  if (count === 0) store.setClientName(person, 'new_conv', date, null);
   io.emit('refresh');
   res.json({ success: true, count, points: getNewConvPoints(count) });
 }
