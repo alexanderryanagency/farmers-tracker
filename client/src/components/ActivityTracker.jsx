@@ -517,7 +517,7 @@ function PersonView({ person, currentUser, today, onRefresh, kpiData, refreshTic
         date: selectedDate,
         count,
         actor: currentUser,
-      }, 'PATCH');
+      });
       setEditingConversations(false);
     } catch (err) {
       setConversationSaveError(err.message || 'Could not save conversations.');

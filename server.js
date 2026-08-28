@@ -1206,7 +1206,7 @@ app.delete('/api/log/:id', (req, res) => {
   res.json({ success: true });
 });
 
-app.patch('/api/activity-correction/conversations', (req, res) => {
+function handleConversationCorrection(req, res) {
   const { person, date } = req.body;
   const count = Number(req.body.count);
   if (!canEditActivityFor(req, person)) return res.status(403).json({ error: 'Activity edit access required' });
@@ -1226,7 +1226,10 @@ app.patch('/api/activity-correction/conversations', (req, res) => {
   if (count === 0) store.setClientName(person, 'new_conv', date, null);
   io.emit('refresh');
   res.json({ success: true, count, points: getNewConvPoints(count) });
-});
+}
+
+app.patch('/api/activity-correction/conversations', handleConversationCorrection);
+app.post('/api/activity-correction/conversations', handleConversationCorrection);
 
 // Coaching notes
 app.get('/api/coaching', (req, res) => {
